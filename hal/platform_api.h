@@ -108,4 +108,5 @@ void platform_cache_edid(void * platform);
 void platform_invalidate_edid(void * platform);
 int platform_set_hdmi_config(struct stream_out *out);
 int platform_set_device_params(struct stream_out *out, int param, int value);
+int platform_hal_plugin_enable(void *platform, struct stream_out *out, bool enable);
 #endif // AUDIO_PLATFORM_API_H
