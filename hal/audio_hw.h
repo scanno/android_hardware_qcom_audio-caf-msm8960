@@ -318,6 +318,7 @@ struct audio_device {
 
     struct sound_card_status snd_card_status;
     int (*offload_effects_set_hpx_state)(bool);
+    void *ext_hw_plugin;
 };
 
 int select_devices(struct audio_device *adev,
