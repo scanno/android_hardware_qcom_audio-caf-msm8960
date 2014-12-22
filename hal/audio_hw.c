@@ -954,6 +954,11 @@ static int stop_input_stream(struct stream_in *in)
         return -EINVAL;
     }
 
+    if (uc_info->in_snd_device != SND_DEVICE_NONE) {
+        if (audio_extn_ext_hw_plugin_usecase_stop(adev->ext_hw_plugin, uc_info))
+            ALOGE("%s: failed to stop ext hw plugin", __func__);
+    }
+
     /* Close in-call recording streams */
     voice_check_and_stop_incall_rec_usecase(adev, in);
 
@@ -1051,6 +1056,11 @@ int start_input_stream(struct stream_in *in)
             continue;
         }
         break;
+    }
+
+    if (uc_info->in_snd_device != SND_DEVICE_NONE) {
+        if (audio_extn_ext_hw_plugin_usecase_start(adev->ext_hw_plugin, uc_info))
+            ALOGE("%s: failed to start ext hw plugin", __func__);
     }
 
     ALOGV("%s: exit", __func__);
@@ -1376,6 +1386,11 @@ static int stop_output_stream(struct stream_out *out)
         return -EINVAL;
     }
 
+    if (uc_info->out_snd_device != SND_DEVICE_NONE) {
+        if (audio_extn_ext_hw_plugin_usecase_stop(adev->ext_hw_plugin, uc_info))
+            ALOGE("%s: failed to stop ext hw plugin", __func__);
+    }
+
     if (is_offload_usecase(out->usecase) &&
         !(audio_extn_dolby_is_passthrough_stream(out->flags))) {
         if (adev->visualizer_stop_output != NULL)
@@ -1386,8 +1401,6 @@ static int stop_output_stream(struct stream_out *out)
         if (adev->offload_effects_stop_output != NULL)
             adev->offload_effects_stop_output(out->handle, out->pcm_device_id);
     }
-
-    audio_extn_ext_hw_plugin_enable(adev->ext_hw_plugin, out, false);
 
     /* 1. Get and set stream specific mixer controls */
     disable_audio_route(adev, uc_info);
@@ -1488,8 +1501,6 @@ int start_output_stream(struct stream_out *out)
 
     select_devices(adev, out->usecase);
 
-    audio_extn_ext_hw_plugin_enable(adev->ext_hw_plugin, out, true);
-
     ALOGV("%s: Opening PCM device card_id(%d) device_id(%d) format(%#x)",
           __func__, adev->snd_card, out->pcm_device_id, out->config.format);
     if (!is_offload_usecase(out->usecase)) {
@@ -1555,6 +1566,12 @@ int start_output_stream(struct stream_out *out)
             audio_extn_check_and_set_dts_hpx_state(adev);
         }
     }
+
+    if (uc_info->out_snd_device != SND_DEVICE_NONE) {
+        if (audio_extn_ext_hw_plugin_usecase_start(adev->ext_hw_plugin, uc_info))
+            ALOGE("%s: failed to start ext hw plugin", __func__);
+    }
+
     ALOGV("%s: exit", __func__);
     return 0;
 error_open:
