@@ -192,7 +192,7 @@ LOCAL_COPY_HEADERS      := audio_extn/audio_defs.h
 
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_EXT_HW_PLUGIN)),true)
     LOCAL_CFLAGS += -DEXT_HW_PLUGIN_ENABLED
-    LOCAL_SRC_FILES += audio_extn/extn_adsp_plugin.c
+    LOCAL_SRC_FILES += audio_extn/ext_hw_plugin.c
 endif
 
 LOCAL_MODULE := audio.primary.$(TARGET_BOARD_PLATFORM)
