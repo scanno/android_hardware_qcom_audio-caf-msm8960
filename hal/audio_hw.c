@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -2665,9 +2665,10 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out = (struct stream_out *)calloc(1, sizeof(struct stream_out));
 
     ALOGD("%s: enter: sample_rate(%d) channel_mask(%#x) devices(%#x) flags(%#x)\
-        stream_handle(%p)",__func__, config->sample_rate, config->channel_mask,
-        devices, flags, &out->stream);
-
+        stream_handle(%p) format(%#x bit_width(%d)",__func__,
+        config->sample_rate, config->channel_mask,
+        devices, flags, &out->stream, config->format,
+        config->offload_info.bit_width);
 
     if (!out) {
         return -ENOMEM;
@@ -2798,7 +2799,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->compr_config.codec->ch_in =
                 audio_channel_count_from_out_mask(config->channel_mask);
         out->compr_config.codec->ch_out = out->compr_config.codec->ch_in;
-        out->bit_width = PCM_OUTPUT_BIT_WIDTH;
+        out->bit_width = config->offload_info.bit_width;
         /*TODO: Do we need to change it for passthrough */
         out->compr_config.codec->format = SND_AUDIOSTREAMFORMAT_RAW;
 
@@ -2811,11 +2812,6 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
 
         if (out->bit_width == 24) {
             out->compr_config.codec->format = SNDRV_PCM_FORMAT_S24_LE;
-        }
-
-        if (out->bit_width == 24 && !platform_check_24_bit_support()) {
-            ALOGW("24 bit support is not enabled, using 16 bit backend");
-            out->compr_config.codec->format = SNDRV_PCM_FORMAT_S16_LE;
         }
 
         if (flags & AUDIO_OUTPUT_FLAG_NON_BLOCKING)

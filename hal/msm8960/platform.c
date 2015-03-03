@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -2288,17 +2288,6 @@ uint32_t platform_get_pcm_offload_buffer_size(audio_offload_info_t* info)
     return fragment_size;
 }
 
-bool platform_check_24_bit_support() {
-
-    char value[PROPERTY_VALUE_MAX] = {0};
-    property_get("audio.offload.24bit.enable", value, "0");
-    if (atoi(value)) {
-        ALOGW("Property audio.offload.24bit.enable is set");
-        return true;
-    }
-    return false;
-}
-
 int platform_set_codec_backend_cfg(struct audio_device* adev,
                          unsigned int bit_width, unsigned int sample_rate)
 {
@@ -2306,7 +2295,7 @@ int platform_set_codec_backend_cfg(struct audio_device* adev,
 
     int ret = 0;
     if (bit_width != adev->cur_codec_backend_bit_width) {
-        const char * mixer_ctl_name = "SLIM_0_RX Format";
+        const char * mixer_ctl_name = "MI2S_0_RX Format";
         struct  mixer_ctl *ctl;
         ctl = mixer_get_ctl_by_name(adev->mixer, mixer_ctl_name);
         if (!ctl) {
@@ -2446,12 +2435,6 @@ bool platform_check_codec_backend_cfg(struct audio_device* adev,
 
 bool platform_check_and_set_codec_backend_cfg(struct audio_device* adev, struct audio_usecase *usecase)
 {
-    // check if 24bit configuration is enabled first
-    if (!platform_check_24_bit_support()) {
-        ALOGW("24bit not enable, no need to check for backend change");
-        return false;
-    }
-
     ALOGV("platform_check_and_set_codec_backend_cfg usecase = %d",usecase->id );
 
     unsigned int new_bit_width, old_bit_width;
