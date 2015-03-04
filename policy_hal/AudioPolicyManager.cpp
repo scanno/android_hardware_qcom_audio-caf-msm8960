@@ -744,6 +744,52 @@ void AudioPolicyManagerCustom::setForceUse(audio_policy_force_use_t usage,
 
 }
 
+audio_io_handle_t AudioPolicyManagerCustom::getOutputForAttr(const audio_attributes_t *attr,
+                                          uint32_t samplingRate,
+                                          audio_format_t format,
+                                          audio_channel_mask_t channelMask,
+                                          audio_output_flags_t flags,
+                                          const audio_offload_info_t *offloadInfo)
+{
+    if (attr == NULL) {
+        ALOGE("getOutputForAttr() called with NULL audio attributes");
+        return 0;
+    }
+    ALOGV("getOutputForAttr() usage=%d, content=%d, tag=%s flags=%08x",
+            attr->usage, attr->content_type, attr->tags, attr->flags);
+
+    // TODO this is where filtering for custom policies (rerouting, dynamic sources) will go
+    routing_strategy strategy = (routing_strategy) getStrategyForAttr(attr);
+    audio_devices_t device = getDeviceForStrategy(strategy, false /*fromCache*/);
+
+    if ((attr->flags & AUDIO_FLAG_HW_AV_SYNC) != 0) {
+        flags = (audio_output_flags_t)(flags | AUDIO_OUTPUT_FLAG_HW_AV_SYNC);
+    }
+
+    if (attr->usage == AUDIO_USAGE_ASSISTANCE_NAVIGATION_GUIDANCE) {
+        flags = (audio_output_flags_t)(AUDIO_OUTPUT_FLAG_FAST | AUDIO_OUTPUT_FLAG_DRIVER_SIDE);
+    }
+
+    ALOGV("getOutputForAttr() device %d, samplingRate %d, format %x, channelMask %x, flags %x",
+          device, samplingRate, format, channelMask, flags);
+
+    audio_stream_type_t stream = streamTypefromAttributesInt(attr);
+
+#ifdef HDMI_PASSTHROUGH_ENABLED
+    if (device & AUDIO_DEVICE_OUT_AUX_DIGITAL) {
+        if (((flags & AUDIO_OUTPUT_FLAG_FAST) &&
+            (stream == AUDIO_STREAM_SYSTEM)) ||
+            (strategy == STRATEGY_SONIFICATION_RESPECTFUL))
+            // Change device to speaker in case of system tone & message tone
+            device = AUDIO_DEVICE_OUT_SPEAKER;
+            ALOGV("getOutputForAttr() after device change device %d, samplingRate %d, format %x, channelMask %x, flags %x",
+          device, samplingRate, format, channelMask, flags);
+    }
+#endif
+    return getOutputForDevice(device, stream, samplingRate, format, channelMask, flags,
+                offloadInfo);
+}
+
 audio_io_handle_t AudioPolicyManagerCustom::getOutputForDevice(
         audio_devices_t device,
         audio_stream_type_t stream,
@@ -2336,6 +2382,48 @@ bool AudioPolicyManagerCustom::isStateInCall(int state) {
        ((state == AUDIO_MODE_RINGTONE) && (mPrevPhoneState == AUDIO_MODE_IN_CALL)));
 }
 
+audio_stream_type_t AudioPolicyManagerCustom::streamTypefromAttributesInt(const audio_attributes_t *attr)
+{
+    // flags to stream type mapping
+    if ((attr->flags & AUDIO_FLAG_AUDIBILITY_ENFORCED) == AUDIO_FLAG_AUDIBILITY_ENFORCED) {
+        return AUDIO_STREAM_ENFORCED_AUDIBLE;
+    }
+    if ((attr->flags & AUDIO_FLAG_SCO) == AUDIO_FLAG_SCO) {
+        return AUDIO_STREAM_BLUETOOTH_SCO;
+    }
+
+    // usage to stream type mapping
+    switch (attr->usage) {
+    case AUDIO_USAGE_MEDIA:
+    case AUDIO_USAGE_GAME:
+    case AUDIO_USAGE_ASSISTANCE_ACCESSIBILITY:
+    case AUDIO_USAGE_ASSISTANCE_NAVIGATION_GUIDANCE:
+        return AUDIO_STREAM_MUSIC;
+    case AUDIO_USAGE_ASSISTANCE_SONIFICATION:
+        return AUDIO_STREAM_SYSTEM;
+    case AUDIO_USAGE_VOICE_COMMUNICATION:
+        return AUDIO_STREAM_VOICE_CALL;
+
+    case AUDIO_USAGE_VOICE_COMMUNICATION_SIGNALLING:
+        return AUDIO_STREAM_DTMF;
+
+    case AUDIO_USAGE_ALARM:
+        return AUDIO_STREAM_ALARM;
+    case AUDIO_USAGE_NOTIFICATION_TELEPHONY_RINGTONE:
+        return AUDIO_STREAM_RING;
+
+    case AUDIO_USAGE_NOTIFICATION:
+    case AUDIO_USAGE_NOTIFICATION_COMMUNICATION_REQUEST:
+    case AUDIO_USAGE_NOTIFICATION_COMMUNICATION_INSTANT:
+    case AUDIO_USAGE_NOTIFICATION_COMMUNICATION_DELAYED:
+    case AUDIO_USAGE_NOTIFICATION_EVENT:
+        return AUDIO_STREAM_NOTIFICATION;
+
+    case AUDIO_USAGE_UNKNOWN:
+    default:
+        return AUDIO_STREAM_MUSIC;
+    }
+}
 
 extern "C" AudioPolicyInterface* createAudioPolicyManager(
         AudioPolicyClientInterface *clientInterface)
