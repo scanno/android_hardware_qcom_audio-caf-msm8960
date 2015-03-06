@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
  * Not a contribution.
  *
  * Copyright (C) 2009 The Android Open Source Project
@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "AudioPolicyManager"
+#define LOG_TAG "AudioPolicyManagerCustom"
 //#define LOG_NDEBUG 0
 
 //#define VERY_VERBOSE_LOGGING
@@ -1535,21 +1535,32 @@ bool AudioPolicyManagerCustom::isOffloadSupported(const audio_offload_info_t& of
 
     char propValue[PROPERTY_VALUE_MAX];
     bool pcmOffload = false;
-#ifdef PCM_OFFLOAD_ENABLED
     if (audio_is_offload_pcm(offloadInfo.format)) {
-        if(property_get("audio.offload.pcm.enable", propValue, NULL)) {
-            bool prop_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
-            if (prop_enabled) {
-                ALOGW("PCM offload property is enabled");
-                pcmOffload = true;
-            }
+        bool prop_enabled = false;
+#ifdef PCM_OFFLOAD_ENABLED_16
+        if ((AUDIO_FORMAT_PCM_16_BIT_OFFLOAD == offloadInfo.format) &&
+               property_get("audio.offload.pcm.16bit.enable", propValue, NULL)) {
+            prop_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
         }
+#endif
+
+#ifdef PCM_OFFLOAD_ENABLED_24
+        if ((AUDIO_FORMAT_PCM_24_BIT_OFFLOAD == offloadInfo.format) &&
+               property_get("audio.offload.pcm.24bit.enable", propValue, NULL)) {
+            prop_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
+        }
+#endif
+
+        if (prop_enabled) {
+            ALOGI("PCM offload property is enabled");
+            pcmOffload = true;
+        }
+
         if (!pcmOffload) {
-            ALOGD("PCM offload disabled by property audio.offload.pcm.enable");
+            ALOGD("system property not enabled for PCM offload format[%x]",offloadInfo.format);
             return false;
         }
     }
-#endif
 
     if (!pcmOffload) {
         // Check if offload has been disabled
@@ -1621,6 +1632,17 @@ bool AudioPolicyManagerCustom::isOffloadSupported(const audio_offload_info_t& of
     // This may prevent offloading in rare situations where effects are left active by apps
     // in the background.
     if (isNonOffloadableEffectEnabled()) {
+        return false;
+    }
+
+    // Check for soundcard status
+    String8 valueStr = mpClientInterface->getParameters((audio_io_handle_t)0,
+                                String8("SND_CARD_STATUS"));
+    AudioParameter result = AudioParameter(valueStr);
+    int isonline = 0;
+    if ((result.getInt(String8("SND_CARD_STATUS"), isonline) == NO_ERROR)
+           && !isonline) {
+        ALOGD("soundcard is offline rejecting offload request");
         return false;
     }
 
