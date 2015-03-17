@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -207,7 +207,7 @@ enum {
 #define VOLTE_CALL_PCM_DEVICE 14
 #define QCHAT_CALL_PCM_DEVICE 20
 #define VOWLAN_CALL_PCM_DEVICE 36
-
+#define DRIVER_SIDE_PCM_DEVICE 4
 
 #define FM_RX_VOLUME "Internal FM RX Volume"
 
