@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
  * Not a contribution.
  *
  * Copyright (C) 2009 The Android Open Source Project
@@ -46,6 +46,12 @@ public:
         virtual void setPhoneState(audio_mode_t state);
         virtual void setForceUse(audio_policy_force_use_t usage,
                                  audio_policy_forced_cfg_t config);
+        virtual audio_io_handle_t getOutputForAttr(const audio_attributes_t *attr,
+                                            uint32_t samplingRate,
+                                            audio_format_t format,
+                                            audio_channel_mask_t channelMask,
+                                            audio_output_flags_t flags,
+                                            const audio_offload_info_t *offloadInfo);
         virtual status_t stopOutput(audio_io_handle_t output,
                                     audio_stream_type_t stream,
                                     int session = 0);
@@ -125,6 +131,8 @@ private:
                 audio_channel_mask_t channelMask,
                 audio_output_flags_t flags,
                 const audio_offload_info_t *offloadInfo);
+        // internal function to derive a stream type value from audio attributes
+        audio_stream_type_t streamTypefromAttributesInt(const audio_attributes_t *attr);
 
         // Used for voip + voice concurrency usecase
         int mPrevPhoneState;
