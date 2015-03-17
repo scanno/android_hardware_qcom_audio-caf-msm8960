@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
  * Not a contribution.
  *
  * Copyright (C) 2009 The Android Open Source Project
@@ -2340,7 +2340,7 @@ bool AudioPolicyManagerCustom::isStateInCall(int state) {
 extern "C" AudioPolicyInterface* createAudioPolicyManager(
         AudioPolicyClientInterface *clientInterface)
 {
-    return new AudioPolicyManager(clientInterface);
+    return new AudioPolicyManagerCustom(clientInterface);
 }
 
 extern "C" void destroyAudioPolicyManager(AudioPolicyInterface *interface)
