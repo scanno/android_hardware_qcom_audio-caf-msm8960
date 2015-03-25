@@ -83,6 +83,9 @@
 
 #define USECASE_AUDIO_PLAYBACK_PRIMARY USECASE_AUDIO_PLAYBACK_DEEP_BUFFER
 
+#define MIXER_CTL_COMPRESS_PLAYBACK_VOLUME "Compress Playback Volume"
+
+
 static unsigned int configured_low_latency_capture_period_size =
         LOW_LATENCY_CAPTURE_PERIOD_SIZE;
 
@@ -2013,18 +2016,15 @@ static int out_set_volume(struct audio_stream_out *stream, float left,
              */
             audio_extn_dolby_set_passt_volume(out, (left == 0.0f));
         } else {
-            char mixer_ctl_name[128];
             struct audio_device *adev = out->dev;
             struct mixer_ctl *ctl;
             int pcm_device_id = platform_get_pcm_device_id(out->usecase,
                                                        PCM_PLAYBACK);
-
-            snprintf(mixer_ctl_name, sizeof(mixer_ctl_name),
-                     "Compress Playback %d Volume", pcm_device_id);
-            ctl = mixer_get_ctl_by_name(adev->mixer, mixer_ctl_name);
+            ctl = mixer_get_ctl_by_name(adev->mixer,
+					MIXER_CTL_COMPRESS_PLAYBACK_VOLUME);
             if (!ctl) {
                 ALOGE("%s: Could not get ctl for mixer cmd - %s",
-                      __func__, mixer_ctl_name);
+                      __func__, MIXER_CTL_COMPRESS_PLAYBACK_VOLUME);
                 return -EINVAL;
             }
             volume[0] = (int)(left * COMPRESS_PLAYBACK_VOLUME_MAX);
