@@ -291,7 +291,8 @@ static bool is_supported_format(audio_format_t format)
         format == AUDIO_FORMAT_AAC_HE_V2 ||
         format == AUDIO_FORMAT_PCM_16_BIT_OFFLOAD ||
         format == AUDIO_FORMAT_PCM_24_BIT_OFFLOAD ||
-        format == AUDIO_FORMAT_AAC)
+        format == AUDIO_FORMAT_AAC ||
+        format == AUDIO_FORMAT_FLAC)
            return true;
 
     return false;
@@ -311,6 +312,9 @@ static int get_snd_codec_id(audio_format_t format)
     case AUDIO_FORMAT_PCM_OFFLOAD:
         id = SND_AUDIOCODEC_PCM;
         break;
+    case AUDIO_FORMAT_FLAC:
+		id = SND_AUDIOCODEC_FLAC;
+		break;
     default:
         ALOGE("%s: Unsupported audio format :%x", __func__, format);
     }
@@ -1774,6 +1778,29 @@ static int parse_compress_metadata(struct stream_out *out, struct str_parms *par
         out->send_new_metadata = 1;
     }
 
+    if (out->format == AUDIO_FORMAT_FLAC) {
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_FLAC_MIN_BLK_SIZE, value, sizeof(value));
+        if (ret >= 0) {
+            out->compr_config.codec->options.flac_dec.min_blk_size = atoi(value);
+            out->send_new_metadata = 1;
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_FLAC_MAX_BLK_SIZE, value, sizeof(value));
+        if (ret >= 0) {
+            out->compr_config.codec->options.flac_dec.max_blk_size = atoi(value);
+            out->send_new_metadata = 1;
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_FLAC_MIN_FRAME_SIZE, value, sizeof(value));
+        if (ret >= 0) {
+            out->compr_config.codec->options.flac_dec.min_frame_size = atoi(value);
+            out->send_new_metadata = 1;
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_FLAC_MAX_FRAME_SIZE, value, sizeof(value));
+        if (ret >= 0) {
+            out->compr_config.codec->options.flac_dec.max_frame_size = atoi(value);
+            out->send_new_metadata = 1;
+        }
+    }
+
     ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_SAMPLE_RATE, value, sizeof(value));
     if(ret >= 0)
         is_meta_data_params = true;
@@ -2825,6 +2852,9 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         if (out->bit_width == 24) {
             out->compr_config.codec->format = SNDRV_PCM_FORMAT_S24_LE;
         }
+
+        if (config->offload_info.format == AUDIO_FORMAT_FLAC)
+            out->compr_config.codec->options.flac_dec.sample_size = PCM_OUTPUT_BIT_WIDTH;
 
         if (flags & AUDIO_OUTPUT_FLAG_NON_BLOCKING)
             out->non_blocking = 1;
