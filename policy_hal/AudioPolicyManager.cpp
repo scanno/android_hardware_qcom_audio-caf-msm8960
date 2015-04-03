@@ -1245,6 +1245,7 @@ audio_io_handle_t AudioPolicyManagerCustom::getInput(audio_source_t inputSource,
     }
 
     sp<IOProfile> profile = getInputProfile(device,
+                                         String8(""),
                                          samplingRate,
                                          format,
                                          channelMask,
@@ -1254,6 +1255,7 @@ audio_io_handle_t AudioPolicyManagerCustom::getInput(audio_source_t inputSource,
         audio_input_flags_t log_flags = flags;
         flags = AUDIO_INPUT_FLAG_NONE;
         profile = getInputProfile(device,
+                                 String8(""),
                                  samplingRate,
                                  format,
                                  channelMask,
