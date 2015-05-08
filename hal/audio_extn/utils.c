@@ -571,6 +571,12 @@ void audio_extn_utils_send_audio_calibration(struct audio_device *adev,
                                              struct audio_usecase *usecase)
 {
     int type = usecase->type;
+    int rc;
+
+    rc = platform_send_audio_calibration_for_usecase(adev->platform, usecase);
+    if (rc != -ENOSYS) {
+        return;
+    }
 
     if (type == PCM_PLAYBACK) {
         struct stream_out *out = usecase->stream.out;

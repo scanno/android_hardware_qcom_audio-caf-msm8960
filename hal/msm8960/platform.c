@@ -1163,6 +1163,77 @@ int platform_send_audio_calibration(void *platform, snd_device_t snd_device,
     return 0;
 }
 
+int platform_send_audio_calibration_for_usecase(void *platform,
+                                                struct audio_usecase *usecase)
+{
+    struct platform_data *my_data = (struct platform_data *)platform;
+    int acdb_dev_id;
+    int ret = 0;
+
+    if ((usecase->type == VOICE_CALL) || (usecase->type == VOIP_CALL)) {
+        ALOGV("%s: by-passing audio calibration for usecase(%d)",
+              __func__, usecase->id);
+        return ret;
+    }
+
+    if ((usecase->type == PCM_PLAYBACK) || (usecase->type == PCM_HFP_CALL)) {
+        switch (usecase->id) {
+        case USECASE_AUDIO_PLAYBACK_DEEP_BUFFER:
+        case USECASE_AUDIO_PLAYBACK_LOW_LATENCY:
+        case USECASE_AUDIO_PLAYBACK_OFFLOAD:
+            acdb_dev_id = 41;
+            break;
+        case USECASE_AUDIO_PLAYBACK_DRIVER_SIDE:
+            acdb_dev_id = 14;
+            break;
+        case USECASE_AUDIO_HFP_SCO:
+        case USECASE_AUDIO_HFP_SCO_WB:
+            acdb_dev_id = 15;
+            break;
+        default:
+            ALOGE("%s: audio calibration not supported for usecase(%d)",
+                  __func__, usecase->id);
+            ret = -EINVAL;
+            break;
+        }
+
+        if ((ret == 0) && (my_data->acdb_send_audio_cal)) {
+            struct stream_out *out = usecase->stream.out;
+            ALOGV("%s: sending audio calibration for usecase(%d) acdb_id(%d)",
+                  __func__, usecase->id, acdb_dev_id);
+            my_data->acdb_send_audio_cal(acdb_dev_id, ACDB_DEV_TYPE_OUT,
+                                         out->app_type_cfg.app_type,
+                                         out->app_type_cfg.sample_rate);
+        }
+    }
+
+    if ((usecase->type == PCM_CAPTURE) || (usecase->type == PCM_HFP_CALL)) {
+        switch (usecase->id) {
+        case USECASE_AUDIO_RECORD:
+        case USECASE_AUDIO_RECORD_COMPRESS:
+        case USECASE_AUDIO_HFP_SCO:
+        case USECASE_AUDIO_HFP_SCO_WB:
+            acdb_dev_id = 11;
+            break;
+        default:
+            ALOGE("%s: audio calibration not supported for usecase(%d)",
+                  __func__, usecase->id);
+            ret = -EINVAL;
+            break;
+        }
+
+        if ((ret == 0) && (my_data->acdb_send_audio_cal)) {
+            ALOGV("%s: sending audio calibration for usecase(%d) acdb_id(%d)",
+                  __func__, usecase->id, acdb_dev_id);
+            my_data->acdb_send_audio_cal(acdb_dev_id, ACDB_DEV_TYPE_IN,
+                                         platform_get_default_app_type(platform),
+                                         48000);
+        }
+    }
+
+    return ret;
+}
+
 int platform_switch_voice_call_device_pre(void *platform)
 {
     struct platform_data *my_data = (struct platform_data *)platform;
