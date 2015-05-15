@@ -50,6 +50,7 @@
 #include <hardware/audio.h>
 #include <hardware/audio_effect.h>
 #include <media/AudioParameter.h>
+#include <media/AudioPolicyHelper.h>
 #include <soundtrigger/SoundTrigger.h>
 #include "AudioPolicyManager.h"
 
@@ -744,36 +745,93 @@ void AudioPolicyManagerCustom::setForceUse(audio_policy_force_use_t usage,
 
 }
 
-audio_io_handle_t AudioPolicyManagerCustom::getOutputForAttr(const audio_attributes_t *attr,
-                                          uint32_t samplingRate,
-                                          audio_format_t format,
-                                          audio_channel_mask_t channelMask,
-                                          audio_output_flags_t flags,
-                                          const audio_offload_info_t *offloadInfo)
+status_t AudioPolicyManagerCustom::getOutputForAttr(const audio_attributes_t *attr,
+                                                    audio_io_handle_t *output,
+                                                    audio_session_t session,
+                                                    audio_stream_type_t *stream,
+                                                    uint32_t samplingRate,
+                                                    audio_format_t format,
+                                                    audio_channel_mask_t channelMask,
+                                                    audio_output_flags_t flags,
+                                                    const audio_offload_info_t *offloadInfo)
 {
-    if (attr == NULL) {
-        ALOGE("getOutputForAttr() called with NULL audio attributes");
-        return 0;
+    audio_attributes_t attributes;
+    if (attr != NULL) {
+        if (!isValidAttributes(attr)) {
+            ALOGE("getOutputForAttr() invalid attributes: usage=%d content=%d flags=0x%x tags=[%s]",
+                  attr->usage, attr->content_type, attr->flags,
+                  attr->tags);
+            return BAD_VALUE;
+        }
+        attributes = *attr;
+    } else {
+        if (*stream < AUDIO_STREAM_MIN || *stream >= AUDIO_STREAM_PUBLIC_CNT) {
+            ALOGE("getOutputForAttr():  invalid stream type");
+            return BAD_VALUE;
+        }
+        stream_type_to_audio_attributes(*stream, &attributes);
     }
-    ALOGV("getOutputForAttr() usage=%d, content=%d, tag=%s flags=%08x",
-            attr->usage, attr->content_type, attr->tags, attr->flags);
 
-    // TODO this is where filtering for custom policies (rerouting, dynamic sources) will go
-    routing_strategy strategy = (routing_strategy) getStrategyForAttr(attr);
+    for (size_t i = 0; i < mPolicyMixes.size(); i++) {
+        sp<AudioOutputDescriptor> desc;
+        if (mPolicyMixes[i]->mMix.mMixType == MIX_TYPE_PLAYERS) {
+            for (size_t j = 0; j < mPolicyMixes[i]->mMix.mCriteria.size(); j++) {
+                if ((RULE_MATCH_ATTRIBUTE_USAGE == mPolicyMixes[i]->mMix.mCriteria[j].mRule &&
+                        mPolicyMixes[i]->mMix.mCriteria[j].mAttr.mUsage == attributes.usage) ||
+                    (RULE_EXCLUDE_ATTRIBUTE_USAGE == mPolicyMixes[i]->mMix.mCriteria[j].mRule &&
+                        mPolicyMixes[i]->mMix.mCriteria[j].mAttr.mUsage != attributes.usage)) {
+                    desc = mPolicyMixes[i]->mOutput;
+                    break;
+                }
+                if (strncmp(attributes.tags, "addr=", strlen("addr=")) == 0 &&
+                        strncmp(attributes.tags + strlen("addr="),
+                                mPolicyMixes[i]->mMix.mRegistrationId.string(),
+                                AUDIO_ATTRIBUTES_TAGS_MAX_SIZE - strlen("addr=") - 1) == 0) {
+                    desc = mPolicyMixes[i]->mOutput;
+                    break;
+                }
+            }
+        } else if (mPolicyMixes[i]->mMix.mMixType == MIX_TYPE_RECORDERS) {
+            if (attributes.usage == AUDIO_USAGE_VIRTUAL_SOURCE &&
+                    strncmp(attributes.tags, "addr=", strlen("addr=")) == 0 &&
+                    strncmp(attributes.tags + strlen("addr="),
+                            mPolicyMixes[i]->mMix.mRegistrationId.string(),
+                            AUDIO_ATTRIBUTES_TAGS_MAX_SIZE - strlen("addr=") - 1) == 0) {
+                desc = mPolicyMixes[i]->mOutput;
+            }
+        }
+        if (desc != 0) {
+            if (!audio_is_linear_pcm(format)) {
+                return BAD_VALUE;
+            }
+            desc->mPolicyMix = &mPolicyMixes[i]->mMix;
+            *stream = streamTypefromAttributesInt(&attributes);
+            *output = desc->mIoHandle;
+            ALOGV("getOutputForAttr() returns output %d", *output);
+            return NO_ERROR;
+        }
+    }
+    if (attributes.usage == AUDIO_USAGE_VIRTUAL_SOURCE) {
+        ALOGW("getOutputForAttr() no policy mix found for usage AUDIO_USAGE_VIRTUAL_SOURCE");
+        return BAD_VALUE;
+    }
+
+    ALOGV("getOutputForAttr() usage=%d, content=%d, tag=%s flags=%08x",
+            attributes.usage, attributes.content_type, attributes.tags, attributes.flags);
+
+    routing_strategy strategy = (routing_strategy) getStrategyForAttr(&attributes);
     audio_devices_t device = getDeviceForStrategy(strategy, false /*fromCache*/);
 
-    if ((attr->flags & AUDIO_FLAG_HW_AV_SYNC) != 0) {
+    if ((attributes.flags & AUDIO_FLAG_HW_AV_SYNC) != 0) {
         flags = (audio_output_flags_t)(flags | AUDIO_OUTPUT_FLAG_HW_AV_SYNC);
     }
 
-    if (attr->usage == AUDIO_USAGE_ASSISTANCE_NAVIGATION_GUIDANCE) {
+    if (attributes.usage == AUDIO_USAGE_ASSISTANCE_NAVIGATION_GUIDANCE) {
         flags = (audio_output_flags_t)(AUDIO_OUTPUT_FLAG_FAST | AUDIO_OUTPUT_FLAG_DRIVER_SIDE);
     }
 
-    ALOGV("getOutputForAttr() device %d, samplingRate %d, format %x, channelMask %x, flags %x",
+    ALOGV("getOutputForAttr() device 0x%x, samplingRate %d, format %x, channelMask %x, flags %x",
           device, samplingRate, format, channelMask, flags);
-
-    audio_stream_type_t stream = streamTypefromAttributesInt(attr);
 
 #ifdef HDMI_PASSTHROUGH_ENABLED
     if (device & AUDIO_DEVICE_OUT_AUX_DIGITAL) {
@@ -786,12 +844,20 @@ audio_io_handle_t AudioPolicyManagerCustom::getOutputForAttr(const audio_attribu
           device, samplingRate, format, channelMask, flags);
     }
 #endif
-    return getOutputForDevice(device, stream, samplingRate, format, channelMask, flags,
-                offloadInfo);
+
+    *stream = streamTypefromAttributesInt(&attributes);
+    *output = getOutputForDevice(device, session, *stream,
+                                 samplingRate, format, channelMask,
+                                 flags, offloadInfo);
+    if (*output == AUDIO_IO_HANDLE_NONE) {
+        return INVALID_OPERATION;
+    }
+    return NO_ERROR;
 }
 
 audio_io_handle_t AudioPolicyManagerCustom::getOutputForDevice(
         audio_devices_t device,
+        audio_session_t session __unused,
         audio_stream_type_t stream,
         uint32_t samplingRate,
         audio_format_t format,
@@ -844,6 +910,13 @@ audio_io_handle_t AudioPolicyManagerCustom::getOutputForDevice(
     }
 #endif //AUDIO_POLICY_TEST
 
+    if (((flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) != 0) &&
+            (stream != AUDIO_STREAM_MUSIC)) {
+        // compress should not be used for non-music streams
+        ALOGE("Offloading only allowed with music stream");
+        return 0;
+    }
+
 #ifdef VOICE_CONCURRENCY
     char propValue[PROPERTY_VALUE_MAX];
     bool prop_play_enabled=false, prop_voip_enabled = false;
@@ -888,14 +961,54 @@ audio_io_handle_t AudioPolicyManagerCustom::getOutputForDevice(
                return 0;
             }
         }
+     }
+#endif
+
+#ifdef HDMI_PASSTHROUGH_ENABLED
+    output = getPassthroughOutput(stream, samplingRate, format, channelMask,
+                                  flags, offloadInfo, device);
+    if (output < 0) {
+        // Error returned if client requests for passthrough and output not available
+        ALOGE("getPassthroughOutput() returns error %d", output);
+        return 0;
+    } else if (output != 0) {
+        ALOGE("getPassthroughOutput() returns new direct output %d", output);
+        return output;
+    } else {
+        ALOGE("getPassthroughOutput:No passthrough o/p returned,try other o/p");
+    }
+
+    if (device & AUDIO_DEVICE_OUT_AUX_DIGITAL) {
+        // Invalidate and close the passthrough output if there is an incoming
+        // non passthrough music streams.
+        // Condition is ignores for for system  streams and message tone as they
+        // will be played out on speaker.
+        if ((stream == AUDIO_STREAM_SYSTEM) ||
+            (stream == AUDIO_STREAM_RING) ||
+             (stream == AUDIO_STREAM_ALARM)
+            /*(strategy == STRATEGY_SONIFICATION_RESPECTFUL)*/) {
+            ALOGV("Do not update and close output system tones/sonification");
+        } else {
+            ALOGV("check and invalidate");
+            updateAndCloseOutputs();
+        }
     }
 #endif
 
-#ifdef WFD_CONCURRENCY
+#ifdef AUDIO_EXTN_AFE_PROXY_ENABLED
+    /*
+    * WFD audio routes back to target speaker when starting a ringtone playback.
+    * This is because primary output is reused for ringtone, so output device is
+    * updated based on SONIFICATION strategy for both ringtone and music playback.
+    * The same issue is not seen on remoted_submix HAL based WFD audio because
+    * primary output is not reused and a new output is created for ringtone playback.
+    * Issue is fixed by updating output flag to AUDIO_OUTPUT_FLAG_FAST when there is
+    * a non-music stream playback on WFD, so primary output is not reused for ringtone.
+    */
     audio_devices_t availableOutputDeviceTypes = mAvailableOutputDevices.types();
     if ((availableOutputDeviceTypes & AUDIO_DEVICE_OUT_PROXY)
           && (stream != AUDIO_STREAM_MUSIC)) {
-        ALOGD(" WFD mode adding ULL flags for non music stream.. flags: %x ", flags );
+        ALOGD("WFD audio: use OUTPUT_FLAG_FAST for non music stream. flags:%x", flags );
         //For voip paths
         if(flags & AUDIO_OUTPUT_FLAG_DIRECT)
             flags = AUDIO_OUTPUT_FLAG_DIRECT;
@@ -944,6 +1057,10 @@ audio_io_handle_t AudioPolicyManagerCustom::getOutputForDevice(
     if ((flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC) != 0) {
         flags = (audio_output_flags_t)(flags | AUDIO_OUTPUT_FLAG_DIRECT);
     }
+    // only allow deep buffering for music stream type
+    if (stream != AUDIO_STREAM_MUSIC) {
+        flags = (audio_output_flags_t)(flags &~AUDIO_OUTPUT_FLAG_DEEP_BUFFER);
+    }
 
     if ((format == AUDIO_FORMAT_PCM_16_BIT) &&(popcount(channelMask) > 2)) {
         ALOGV("owerwrite flag(%x) for PCM16 multi-channel(CM:%x) playback", flags ,channelMask);
@@ -979,7 +1096,18 @@ audio_io_handle_t AudioPolicyManagerCustom::getOutputForDevice(
 
     if (profile != 0) {
         sp<AudioOutputDescriptor> outputDesc = NULL;
-
+#ifdef MULTIPLE_OFFLOAD_ENABLED
+        bool multiOffloadEnabled = false;
+        char value[PROPERTY_VALUE_MAX] = {0};
+        property_get("audio.offload.multiple.enabled", value, NULL);
+        if (atoi(value) || !strncmp("true", value, 4))
+            multiOffloadEnabled = true;
+        // if multiple concurrent offload decode is supported
+        // do no check for reuse and also don't close previous output if its offload
+        // previous output will be closed during track destruction
+        if (multiOffloadEnabled && ((flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) != 0))
+            goto get_output__new_output_desc;
+#endif
         for (size_t i = 0; i < mOutputs.size(); i++) {
             sp<AudioOutputDescriptor> desc = mOutputs.valueAt(i);
             if (!desc->isDuplicated() && (profile == desc->mProfile)) {
@@ -998,6 +1126,7 @@ audio_io_handle_t AudioPolicyManagerCustom::getOutputForDevice(
         if (outputDesc != NULL) {
             closeOutput(outputDesc->mIoHandle);
         }
+get_output__new_output_desc:
         outputDesc = new AudioOutputDescriptor(profile);
         outputDesc->mDevice = device;
         outputDesc->mLatency = 0;
@@ -1029,6 +1158,10 @@ audio_io_handle_t AudioPolicyManagerCustom::getOutputForDevice(
             if (output != AUDIO_IO_HANDLE_NONE) {
                 mpClientInterface->closeOutput(output);
             }
+            // fall back to mixer output if possible when the direct output could not be open
+            if (audio_is_linear_pcm(format) && samplingRate <= MAX_MIXER_SAMPLING_RATE) {
+                goto non_direct_output;
+            }
             return AUDIO_IO_HANDLE_NONE;
         }
         outputDesc->mSamplingRate = config.sample_rate;
@@ -1042,7 +1175,23 @@ audio_io_handle_t AudioPolicyManagerCustom::getOutputForDevice(
         addOutput(output, outputDesc);
         audio_io_handle_t dstOutput = getOutputForEffect();
         if (dstOutput == output) {
+#ifdef DOLBY_DAP
+            status_t status = mpClientInterface->moveEffects(AUDIO_SESSION_OUTPUT_MIX, srcOutput, dstOutput);
+            if (status == NO_ERROR) {
+                for (size_t i = 0; i < mEffects.size(); i++) {
+                    sp<EffectDescriptor> desc = mEffects.valueAt(i);
+                    if (desc->mSession == AUDIO_SESSION_OUTPUT_MIX) {
+                        // update the mIo member of EffectDescriptor for the global effect
+                        ALOGV("%s updating mIo", __FUNCTION__);
+                        desc->mIo = dstOutput;
+                    }
+                }
+            } else {
+                ALOGW("%s moveEffects from %d to %d failed", __FUNCTION__, srcOutput, dstOutput);
+            }
+#else // DOLBY_END
             mpClientInterface->moveEffects(AUDIO_SESSION_OUTPUT_MIX, srcOutput, dstOutput);
+#endif // LINE_ADDED_BY_DOLBY
         }
         mPreviousOutputs = mOutputs;
         ALOGV("getOutput() returns new direct output %d", output);
@@ -1073,7 +1222,6 @@ non_direct_output:
 
     return output;
 }
-
 
 status_t AudioPolicyManagerCustom::stopOutput(audio_io_handle_t output,
                                             audio_stream_type_t stream,
@@ -2447,6 +2595,37 @@ audio_stream_type_t AudioPolicyManagerCustom::streamTypefromAttributesInt(const 
     default:
         return AUDIO_STREAM_MUSIC;
     }
+}
+
+bool AudioPolicyManagerCustom::isValidAttributes(const audio_attributes_t *paa) {
+    // has flags that map to a strategy?
+    if ((paa->flags & (AUDIO_FLAG_AUDIBILITY_ENFORCED | AUDIO_FLAG_SCO | AUDIO_FLAG_BEACON)) != 0) {
+        return true;
+    }
+
+    // has known usage?
+    switch (paa->usage) {
+    case AUDIO_USAGE_UNKNOWN:
+    case AUDIO_USAGE_MEDIA:
+    case AUDIO_USAGE_VOICE_COMMUNICATION:
+    case AUDIO_USAGE_VOICE_COMMUNICATION_SIGNALLING:
+    case AUDIO_USAGE_ALARM:
+    case AUDIO_USAGE_NOTIFICATION:
+    case AUDIO_USAGE_NOTIFICATION_TELEPHONY_RINGTONE:
+    case AUDIO_USAGE_NOTIFICATION_COMMUNICATION_REQUEST:
+    case AUDIO_USAGE_NOTIFICATION_COMMUNICATION_INSTANT:
+    case AUDIO_USAGE_NOTIFICATION_COMMUNICATION_DELAYED:
+    case AUDIO_USAGE_NOTIFICATION_EVENT:
+    case AUDIO_USAGE_ASSISTANCE_ACCESSIBILITY:
+    case AUDIO_USAGE_ASSISTANCE_NAVIGATION_GUIDANCE:
+    case AUDIO_USAGE_ASSISTANCE_SONIFICATION:
+    case AUDIO_USAGE_GAME:
+    case AUDIO_USAGE_VIRTUAL_SOURCE:
+        break;
+    default:
+        return false;
+    }
+    return true;
 }
 
 extern "C" AudioPolicyInterface* createAudioPolicyManager(
