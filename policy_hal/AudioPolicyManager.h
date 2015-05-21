@@ -46,12 +46,15 @@ public:
         virtual void setPhoneState(audio_mode_t state);
         virtual void setForceUse(audio_policy_force_use_t usage,
                                  audio_policy_forced_cfg_t config);
-        virtual audio_io_handle_t getOutputForAttr(const audio_attributes_t *attr,
-                                            uint32_t samplingRate,
-                                            audio_format_t format,
-                                            audio_channel_mask_t channelMask,
-                                            audio_output_flags_t flags,
-                                            const audio_offload_info_t *offloadInfo);
+        virtual status_t getOutputForAttr(const audio_attributes_t *attr,
+                                          audio_io_handle_t *output,
+                                          audio_session_t session,
+                                          audio_stream_type_t *stream,
+                                          uint32_t samplingRate,
+                                          audio_format_t format,
+                                          audio_channel_mask_t channelMask,
+                                          audio_output_flags_t flags,
+                                          const audio_offload_info_t *offloadInfo);
         virtual status_t stopOutput(audio_io_handle_t output,
                                     audio_stream_type_t stream,
                                     int session = 0);
@@ -125,6 +128,7 @@ private:
         // internal method to return the output handle for the given device and format
         audio_io_handle_t getOutputForDevice(
                 audio_devices_t device,
+                audio_session_t session,
                 audio_stream_type_t stream,
                 uint32_t samplingRate,
                 audio_format_t format,
@@ -133,6 +137,7 @@ private:
                 const audio_offload_info_t *offloadInfo);
         // internal function to derive a stream type value from audio attributes
         audio_stream_type_t streamTypefromAttributesInt(const audio_attributes_t *attr);
+        bool isValidAttributes(const audio_attributes_t *paa);
 
         // Used for voip + voice concurrency usecase
         int mPrevPhoneState;
