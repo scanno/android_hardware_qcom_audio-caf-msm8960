@@ -1769,9 +1769,8 @@ bool AudioPolicyManagerCustom::isOffloadSupported(const audio_offload_info_t& of
 
         //check if it's multi-channel AAC (includes sub formats) and FLAC format
         if ((popcount(offloadInfo.channel_mask) > 2) &&
-            (((offloadInfo.format & AUDIO_FORMAT_MAIN_MASK) == AUDIO_FORMAT_AAC) ||
-            ((offloadInfo.format & AUDIO_FORMAT_MAIN_MASK) == AUDIO_FORMAT_FLAC))) {
-            ALOGD("offload disabled for multi-channel AAC and FLAC format");
+            ((offloadInfo.format & AUDIO_FORMAT_MAIN_MASK) == AUDIO_FORMAT_FLAC)) {
+            ALOGD("offload disabled for multi-channel FLAC format");
             return false;
         }
 
