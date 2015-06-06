@@ -149,7 +149,7 @@ static int32_t start_hfp(struct audio_device *adev,
 
     pcm_dev_rx_id = platform_get_pcm_device_id(uc_info->id, PCM_PLAYBACK);
     pcm_dev_tx_id = platform_get_pcm_device_id(uc_info->id, PCM_CAPTURE);
-    pcm_dev_asm_rx_id = HFP_SCO_RX;
+    pcm_dev_asm_rx_id = ASM_TX_LOOPBACK;
     pcm_dev_asm_tx_id = HFP_PCM_RX;
     if (pcm_dev_rx_id < 0 || pcm_dev_tx_id < 0 ||
         pcm_dev_asm_rx_id < 0 || pcm_dev_asm_tx_id < 0 ) {
@@ -164,8 +164,8 @@ static int32_t start_hfp(struct audio_device *adev,
           __func__, pcm_dev_rx_id, pcm_dev_tx_id, pcm_dev_asm_rx_id, pcm_dev_asm_tx_id,
           uc_info->id);
 
-    ALOGD("%s: Opening PCM playback device card_id(%d) device_id(%d)",
-          __func__, adev->snd_card, pcm_dev_rx_id);
+    ALOGD("%s: Opening PCM playback device card_id(%d) pcm_dev_asm_rx_id(%d)",
+          __func__, adev->snd_card, pcm_dev_asm_rx_id);
     hfpmod.hfp_sco_rx = pcm_open(adev->snd_card,
                                   pcm_dev_asm_rx_id,
                                   PCM_OUT, &pcm_config_hfp);
@@ -174,8 +174,8 @@ static int32_t start_hfp(struct audio_device *adev,
         ret = -EIO;
         goto exit;
     }
-    ALOGD("%s: Opening PCM capture device card_id(%d) device_id(%d)",
-          __func__, adev->snd_card, pcm_dev_tx_id);
+    ALOGD("%s: Opening PCM playback device card_id(%d) device_rx_id(%d)",
+          __func__, adev->snd_card, pcm_dev_rx_id);
     hfpmod.hfp_pcm_rx = pcm_open(adev->snd_card,
                                    pcm_dev_rx_id,
                                    PCM_OUT, &pcm_config_hfp);
@@ -184,6 +184,8 @@ static int32_t start_hfp(struct audio_device *adev,
         ret = -EIO;
         goto exit;
     }
+	ALOGD("%s: Opening PCM capture device card_id(%d) device_asm_tx_id(%d)",
+          __func__, adev->snd_card, pcm_dev_asm_tx_id);
     hfpmod.hfp_sco_tx = pcm_open(adev->snd_card,
                                   pcm_dev_asm_tx_id,
                                   PCM_IN, &pcm_config_hfp);
@@ -192,7 +194,7 @@ static int32_t start_hfp(struct audio_device *adev,
         ret = -EIO;
         goto exit;
     }
-    ALOGV("%s: Opening PCM capture device card_id(%d) device_id(%d)",
+    ALOGD("%s: Opening PCM capture device card_id(%d) device_tx_id(%d)",
           __func__, adev->snd_card, pcm_dev_tx_id);
     hfpmod.hfp_pcm_tx = pcm_open(adev->snd_card,
                                    pcm_dev_tx_id,
