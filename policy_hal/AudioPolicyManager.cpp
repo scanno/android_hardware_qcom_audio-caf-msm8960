@@ -830,6 +830,10 @@ status_t AudioPolicyManagerCustom::getOutputForAttr(const audio_attributes_t *at
         flags = (audio_output_flags_t)(AUDIO_OUTPUT_FLAG_FAST | AUDIO_OUTPUT_FLAG_DRIVER_SIDE);
     }
 
+    if (attributes.usage == AUDIO_USAGE_REAR_ENTERTAINMENT_SYSTEM) {
+        flags = (audio_output_flags_t)(flags | AUDIO_OUTPUT_FLAG_REAR_ENTERTAINMENT_SYSTEM);
+    }
+
     ALOGV("getOutputForAttr() device 0x%x, samplingRate %d, format %x, channelMask %x, flags %x",
           device, samplingRate, format, channelMask, flags);
 
@@ -1105,7 +1109,8 @@ audio_io_handle_t AudioPolicyManagerCustom::getOutputForDevice(
         // if multiple concurrent offload decode is supported
         // do no check for reuse and also don't close previous output if its offload
         // previous output will be closed during track destruction
-        if (multiOffloadEnabled && ((flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) != 0))
+        if (multiOffloadEnabled && ((flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) != 0) &&
+            ((flags & AUDIO_OUTPUT_FLAG_REAR_ENTERTAINMENT_SYSTEM) == 0))
             goto get_output__new_output_desc;
 #endif
         for (size_t i = 0; i < mOutputs.size(); i++) {
@@ -2569,6 +2574,7 @@ audio_stream_type_t AudioPolicyManagerCustom::streamTypefromAttributesInt(const 
     case AUDIO_USAGE_GAME:
     case AUDIO_USAGE_ASSISTANCE_ACCESSIBILITY:
     case AUDIO_USAGE_ASSISTANCE_NAVIGATION_GUIDANCE:
+    case AUDIO_USAGE_REAR_ENTERTAINMENT_SYSTEM:
         return AUDIO_STREAM_MUSIC;
     case AUDIO_USAGE_ASSISTANCE_SONIFICATION:
         return AUDIO_STREAM_SYSTEM;
@@ -2620,6 +2626,7 @@ bool AudioPolicyManagerCustom::isValidAttributes(const audio_attributes_t *paa) 
     case AUDIO_USAGE_ASSISTANCE_SONIFICATION:
     case AUDIO_USAGE_GAME:
     case AUDIO_USAGE_VIRTUAL_SOURCE:
+    case AUDIO_USAGE_REAR_ENTERTAINMENT_SYSTEM:
         break;
     default:
         return false;
