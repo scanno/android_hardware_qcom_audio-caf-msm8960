@@ -84,7 +84,7 @@
 #define USECASE_AUDIO_PLAYBACK_PRIMARY USECASE_AUDIO_PLAYBACK_DEEP_BUFFER
 
 #define MIXER_CTL_COMPRESS_PLAYBACK_VOLUME "Compress Playback Volume"
-
+#define MIXER_CTL_RES_COMPRESS_PLAYBACK_VOLUME "RES Compress Playback Volume"
 
 static unsigned int configured_low_latency_capture_period_size =
         LOW_LATENCY_CAPTURE_PERIOD_SIZE;
@@ -131,6 +131,17 @@ struct pcm_config pcm_config_driver_side = {
     .start_threshold = LOW_LATENCY_OUTPUT_PERIOD_SIZE / 4,
     .stop_threshold = INT_MAX,
     .avail_min = LOW_LATENCY_OUTPUT_PERIOD_SIZE / 4,
+};
+
+struct pcm_config pcm_config_res = {
+    .channels = 2,
+    .rate = DEFAULT_OUTPUT_SAMPLING_RATE,
+    .period_size = DEEP_BUFFER_OUTPUT_PERIOD_SIZE,
+    .period_count = DEEP_BUFFER_OUTPUT_PERIOD_COUNT,
+    .format = PCM_FORMAT_S16_LE,
+    .start_threshold = DEEP_BUFFER_OUTPUT_PERIOD_SIZE / 4,
+    .stop_threshold = INT_MAX,
+    .avail_min = DEEP_BUFFER_OUTPUT_PERIOD_SIZE / 4,
 };
 
 struct pcm_config pcm_config_audio_capture = {
@@ -214,6 +225,8 @@ const char * const use_case_table[AUDIO_USECASE_MAX] = {
     [USECASE_AUDIO_PLAYBACK_AFE_PROXY] = "afe-proxy-playback",
     [USECASE_AUDIO_RECORD_AFE_PROXY] = "afe-proxy-record",
     [USECASE_AUDIO_PLAYBACK_DRIVER_SIDE] = "driver-side-playback",
+    [USECASE_AUDIO_PLAYBACK_RES] = "res-playback",
+    [USECASE_AUDIO_PLAYBACK_RES_OFFLOAD] = "res-playback-offload",
 };
 
 static const audio_usecase_t offload_usecases[] = {
@@ -1137,6 +1150,11 @@ static void stop_compressed_output_l(struct stream_out *out)
 bool is_offload_usecase(audio_usecase_t uc_id)
 {
     unsigned int i;
+
+    if (uc_id == USECASE_AUDIO_PLAYBACK_RES_OFFLOAD) {
+        return true;
+    }
+
     for (i = 0; i < sizeof(offload_usecases)/sizeof(offload_usecases[0]); i++) {
         if (uc_id == offload_usecases[i])
             return true;
@@ -2100,8 +2118,13 @@ static int out_set_volume(struct audio_stream_out *stream, float left,
             struct mixer_ctl *ctl;
             int pcm_device_id = platform_get_pcm_device_id(out->usecase,
                                                        PCM_PLAYBACK);
-            ctl = mixer_get_ctl_by_name(adev->mixer,
-					MIXER_CTL_COMPRESS_PLAYBACK_VOLUME);
+            if (out->usecase == USECASE_AUDIO_PLAYBACK_RES_OFFLOAD) {
+                ctl = mixer_get_ctl_by_name(adev->mixer,
+                                            MIXER_CTL_RES_COMPRESS_PLAYBACK_VOLUME);
+            } else {
+                ctl = mixer_get_ctl_by_name(adev->mixer,
+                                            MIXER_CTL_COMPRESS_PLAYBACK_VOLUME);
+            }
             if (!ctl) {
                 ALOGE("%s: Could not get ctl for mixer cmd - %s",
                       __func__, MIXER_CTL_COMPRESS_PLAYBACK_VOLUME);
@@ -2849,7 +2872,12 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
             goto error_open;
         }
 
-        out->usecase = get_offload_usecase(adev);
+        if (out->flags & AUDIO_OUTPUT_FLAG_REAR_ENTERTAINMENT_SYSTEM) {
+            out->usecase = USECASE_AUDIO_PLAYBACK_RES_OFFLOAD;
+        } else {
+            out->usecase = get_offload_usecase(adev);
+        }
+
         if (config->offload_info.channel_mask)
             out->channel_mask = config->offload_info.channel_mask;
         else if (config->channel_mask) {
@@ -2964,6 +2992,11 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->usecase = USECASE_AUDIO_PLAYBACK_LOW_LATENCY;
         out->config = pcm_config_low_latency;
         out->sample_rate = out->config.rate;
+    } else if (out->flags & AUDIO_OUTPUT_FLAG_REAR_ENTERTAINMENT_SYSTEM) {
+        format = AUDIO_FORMAT_PCM_16_BIT;
+        out->usecase = USECASE_AUDIO_PLAYBACK_RES;
+        out->config = pcm_config_res;
+        out->sample_rate = out->config.rate;
     } else {
         /* primary path is the default path selected if no other outputs are available/suitable */
         format = AUDIO_FORMAT_PCM_16_BIT;
@@ -3074,7 +3107,9 @@ static void adev_close_output_stream(struct audio_hw_device *dev __unused,
     if (is_offload_usecase(out->usecase)) {
         audio_extn_dts_remove_state_notifier_node(out->usecase);
         destroy_offload_callback_thread(out);
-        free_offload_usecase(adev, out->usecase);
+        if (out->usecase != USECASE_AUDIO_PLAYBACK_RES_OFFLOAD) {
+            free_offload_usecase(adev, out->usecase);
+        }
         if (out->compr_config.codec != NULL)
             free(out->compr_config.codec);
     }

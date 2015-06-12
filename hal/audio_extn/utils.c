@@ -73,6 +73,7 @@ const struct string_to_enum s_flag_name_to_enum_table[] = {
 #endif
     STRING_TO_ENUM(AUDIO_OUTPUT_FLAG_COMPRESS_PASSTHROUGH),
     STRING_TO_ENUM(AUDIO_OUTPUT_FLAG_DRIVER_SIDE),
+    STRING_TO_ENUM(AUDIO_OUTPUT_FLAG_REAR_ENTERTAINMENT_SYSTEM),
 };
 
 const struct string_to_enum s_format_name_to_enum_table[] = {
