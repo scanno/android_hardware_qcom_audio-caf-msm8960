@@ -208,6 +208,8 @@ static int pcm_device_table[AUDIO_USECASE_MAX][2] = {
     [USECASE_AUDIO_SPKR_CALIB_RX] = {SPKR_PROT_CALIB_RX_PCM_DEVICE, -1},
     [USECASE_AUDIO_SPKR_CALIB_TX] = {-1, SPKR_PROT_CALIB_TX_PCM_DEVICE},
     [USECASE_AUDIO_PLAYBACK_DRIVER_SIDE] = {DRIVER_SIDE_PCM_DEVICE, DRIVER_SIDE_PCM_DEVICE},
+    [USECASE_AUDIO_PLAYBACK_RES] = {RES_PCM_DEVICE, RES_PCM_DEVICE},
+    [USECASE_AUDIO_PLAYBACK_RES_OFFLOAD] = {RES_OFFLOAD_DEVICE, RES_OFFLOAD_DEVICE},
 };
 
 /* Array to store sound devices */
@@ -1181,7 +1183,9 @@ int platform_send_audio_calibration_for_usecase(void *platform,
         case USECASE_AUDIO_PLAYBACK_DEEP_BUFFER:
         case USECASE_AUDIO_PLAYBACK_LOW_LATENCY:
         case USECASE_AUDIO_PLAYBACK_OFFLOAD:
-            acdb_dev_id = 41;
+        case USECASE_AUDIO_PLAYBACK_RES:
+        case USECASE_AUDIO_PLAYBACK_RES_OFFLOAD:
+            acdb_dev_id = 78;
             break;
         case USECASE_AUDIO_PLAYBACK_DRIVER_SIDE:
             acdb_dev_id = 14;

@@ -209,6 +209,8 @@ enum {
 #define QCHAT_CALL_PCM_DEVICE 20
 #define VOWLAN_CALL_PCM_DEVICE 36
 #define DRIVER_SIDE_PCM_DEVICE 4
+#define RES_PCM_DEVICE 13
+#define RES_OFFLOAD_DEVICE 14
 
 #define FM_RX_VOLUME "Internal FM RX Volume"
 
