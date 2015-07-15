@@ -71,7 +71,9 @@ const struct string_to_enum s_flag_name_to_enum_table[] = {
 #ifdef COMPRESS_VOIP_ENABLED
     STRING_TO_ENUM(AUDIO_OUTPUT_FLAG_VOIP_RX),
 #endif
+#ifdef HDMI_PASSTHROUGH_ENABLED
     STRING_TO_ENUM(AUDIO_OUTPUT_FLAG_COMPRESS_PASSTHROUGH),
+#endif
     STRING_TO_ENUM(AUDIO_OUTPUT_FLAG_DRIVER_SIDE),
     STRING_TO_ENUM(AUDIO_OUTPUT_FLAG_REAR_ENTERTAINMENT_SYSTEM),
 };
@@ -554,11 +556,13 @@ int audio_extn_utils_send_app_type_cfg(struct audio_usecase *usecase)
 
     app_type_cfg[len++] = out->app_type_cfg.app_type;
     app_type_cfg[len++] = acdb_dev_id;
+#ifdef HDMI_PASSTHROUGH_ENABLED
     if (((out->format == AUDIO_FORMAT_E_AC3) ||
         (out->format == AUDIO_FORMAT_E_AC3_JOC)) &&
         (out->flags  & AUDIO_OUTPUT_FLAG_COMPRESS_PASSTHROUGH))
         app_type_cfg[len++] = sample_rate * 4;
     else
+#endif
         app_type_cfg[len++] = sample_rate;
     mixer_ctl_set_array(ctl, app_type_cfg, len);
     ALOGI("%s app_type %d, acdb_dev_id %d, sample_rate %d",

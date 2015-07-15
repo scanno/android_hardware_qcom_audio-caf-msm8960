@@ -307,9 +307,12 @@ static bool is_supported_format(audio_format_t format)
         format == AUDIO_FORMAT_AAC_HE_V2 ||
         format == AUDIO_FORMAT_PCM_16_BIT_OFFLOAD ||
         format == AUDIO_FORMAT_PCM_24_BIT_OFFLOAD ||
-        format == AUDIO_FORMAT_FLAC ||
-        format == AUDIO_FORMAT_WMA ||
-        format == AUDIO_FORMAT_WMA_PRO)
+        format == AUDIO_FORMAT_FLAC
+#ifdef WMA_OFFLOAD_ENABLED
+        || format == AUDIO_FORMAT_WMA
+        || format == AUDIO_FORMAT_WMA_PRO
+#endif
+        )
            return true;
 
     return false;
@@ -330,14 +333,16 @@ static int get_snd_codec_id(audio_format_t format)
         id = SND_AUDIOCODEC_PCM;
         break;
     case AUDIO_FORMAT_FLAC:
-	id = SND_AUDIOCODEC_FLAC;
-	break;
+        id = SND_AUDIOCODEC_FLAC;
+        break;
+#ifdef WMA_OFFLOAD_ENABLED
     case AUDIO_FORMAT_WMA:
-	id = SND_AUDIOCODEC_WMA;
-	break;
+        id = SND_AUDIOCODEC_WMA;
+        break;
     case AUDIO_FORMAT_WMA_PRO:
-	id = SND_AUDIOCODEC_WMA_PRO;
-	break;
+        id = SND_AUDIOCODEC_WMA_PRO;
+        break;
+#endif
     default:
         ALOGE("%s: Unsupported audio format :%x", __func__, format);
     }
@@ -1829,6 +1834,7 @@ static int parse_compress_metadata(struct stream_out *out, struct str_parms *par
         }
     }
 
+#ifdef WMA_OFFLOAD_ENABLED
     if (out->format == AUDIO_FORMAT_WMA || out->format == AUDIO_FORMAT_WMA_PRO) {
 	 ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_WMA_FORMAT_TAG, value, sizeof(value));
 	 if (ret >= 0) {
@@ -1874,6 +1880,7 @@ static int parse_compress_metadata(struct stream_out *out, struct str_parms *par
 	       out->compr_config.codec->options.wma.encodeopt1,
 	       out->compr_config.codec->options.wma.encodeopt2);
     }
+#endif /* WMA_OFFLOAD_ENABLED */
 
     ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_SAMPLE_RATE, value, sizeof(value));
     if(ret >= 0)
@@ -2780,10 +2787,9 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out = (struct stream_out *)calloc(1, sizeof(struct stream_out));
 
     ALOGD("%s: enter: sample_rate(%d) channel_mask(%#x) devices(%#x) flags(%#x)\
-        stream_handle(%p) format(%#x bit_width(%d)",__func__,
+        stream_handle(%p) format(%#x)",__func__,
         config->sample_rate, config->channel_mask,
-        devices, flags, &out->stream, config->format,
-        config->offload_info.bit_width);
+        devices, flags, &out->stream, config->format);
 
     if (!out) {
         return -ENOMEM;
@@ -2919,7 +2925,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->compr_config.codec->ch_in =
                 audio_channel_count_from_out_mask(config->channel_mask);
         out->compr_config.codec->ch_out = out->compr_config.codec->ch_in;
-        out->bit_width = config->offload_info.bit_width;
+        out->bit_width = PCM_OUTPUT_BIT_WIDTH;
         /*TODO: Do we need to change it for passthrough */
         out->compr_config.codec->format = SND_AUDIOSTREAMFORMAT_RAW;
 
