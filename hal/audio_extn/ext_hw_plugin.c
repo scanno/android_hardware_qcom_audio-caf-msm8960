@@ -57,7 +57,7 @@ struct ext_hw_plugin_data {
 };
 
 /* This can be defined in platform specific file or use compile flag */
-#define LIB_PLUGIN_DRIVER "/system/lib/libaudiohalplugin.so"
+#define LIB_PLUGIN_DRIVER "/system/vendor/lib/libaudiohalplugin.so"
 
 void* audio_extn_ext_hw_plugin_init(struct audio_device *adev)
 {
