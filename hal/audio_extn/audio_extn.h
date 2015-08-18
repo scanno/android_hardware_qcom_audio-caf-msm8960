@@ -445,6 +445,10 @@ typedef enum {
 #define AUDIO_FORMAT_E_AC3_JOC  0x19000000UL
 #endif
 
+#ifndef AUDIO_FORMAT_DTS_LBR
+#define AUDIO_FORMAT_DTS_LBR 0x1E000000UL
+#endif
+
 int b64decode(char *inp, int ilen, uint8_t* outp);
 int b64encode(uint8_t *inp, int ilen, char* outp);
 
