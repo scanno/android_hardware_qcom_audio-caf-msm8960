@@ -5,7 +5,11 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := AudioPolicyManager.cpp
 
-LOCAL_C_INCLUDES := $(TOPDIR)frameworks/av/services
+LOCAL_C_INCLUDES := $(TOPDIR)frameworks/av/services \
+                    $(TOPDIR)frameworks/av/services/audiopolicy/common/include \
+                    $(TOPDIR)frameworks/av/services/audiopolicy/engine/interface \
+                    $(TOPDIR)frameworks/av/services/audiopolicy \
+                    $(TOPDIR)frameworks/av/services/audiopolicy/common/managerdefinitions/include
 
 LOCAL_SHARED_LIBRARIES := \
     libcutils \
