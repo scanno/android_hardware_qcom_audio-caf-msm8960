@@ -2987,12 +2987,14 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->usecase = USECASE_AUDIO_PLAYBACK_AFE_PROXY;
         out->config = pcm_config_afe_proxy_playback;
         adev->voice_tx_output = out;
+#ifdef DRIVER_SIDE_PLAYBACK_ENABLED
     } else if (out->flags & AUDIO_OUTPUT_FLAG_DRIVER_SIDE &&
                out->flags & AUDIO_OUTPUT_FLAG_FAST) {
         format = AUDIO_FORMAT_PCM_16_BIT;
         out->usecase = USECASE_AUDIO_PLAYBACK_DRIVER_SIDE;
         out->config = pcm_config_driver_side;
         out->sample_rate = out->config.rate;
+#endif
     } else if (out->flags & AUDIO_OUTPUT_FLAG_FAST) {
         format = AUDIO_FORMAT_PCM_16_BIT;
         out->usecase = USECASE_AUDIO_PLAYBACK_LOW_LATENCY;
