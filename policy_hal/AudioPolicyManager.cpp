@@ -40,11 +40,69 @@
 #include <policy.h>
 #include "AudioPolicyManager.h"
 
+#ifdef DRIVER_SIDE_PLAYBACK_ENABLED
+#define AUDIO_OUTPUT_FLAG_DRIVER_SIDE 0x10000
+#endif
+
 namespace android {
 
 // ----------------------------------------------------------------------------
 // AudioPolicyInterface implementation
 // ----------------------------------------------------------------------------
+
+AudioPolicyManagerCustom::AudioPolicyManagerCustom(AudioPolicyClientInterface *clientInterface)
+    :AudioPolicyManager(clientInterface)
+{
+#ifdef DRIVER_SIDE_PLAYBACK_ENABLED
+    audio_module_handle_t moduleHandle;
+    audio_config_t config;
+    audio_io_handle_t handle = AUDIO_IO_HANDLE_NONE;
+    status_t status;
+
+    if (mPrimaryOutput != 0) {
+        mDriverSideProfile = new IOProfile(String8("driver-side"), AUDIO_PORT_ROLE_SOURCE);
+        mDriverSideProfile->attach(mPrimaryOutput->mPort->mModule);
+        mDriverSideProfile->mSamplingRates.add(48000);
+        mDriverSideProfile->mFormats.add(AUDIO_FORMAT_PCM_16_BIT);
+        mDriverSideProfile->mChannelMasks.add(AUDIO_CHANNEL_OUT_STEREO);
+        mDriverSideProfile->mSupportedDevices.add(mDefaultOutputDevice);
+        mDriverSideProfile->mFlags = (audio_output_flags_t)(AUDIO_OUTPUT_FLAG_FAST|AUDIO_OUTPUT_FLAG_DRIVER_SIDE);
+        mPrimaryOutput->mPort->mModule->mOutputProfiles.add(mDriverSideProfile);
+
+        moduleHandle = mPrimaryOutput->getModuleHandle();
+
+        mDriverSideOutput = new SwAudioOutputDescriptor(mDriverSideProfile,
+                                                        mpClientInterface);
+        mDriverSideOutput->mDevice = AUDIO_DEVICE_OUT_SPEAKER;
+
+        config = AUDIO_CONFIG_INITIALIZER;
+        config.sample_rate = 48000;
+        config.channel_mask = AUDIO_CHANNEL_OUT_STEREO;
+        config.format = AUDIO_FORMAT_PCM_16_BIT;
+
+        status = mpClientInterface->openOutput(moduleHandle,
+                                               &handle,
+                                               &config,
+                                               &mDriverSideOutput->mDevice,
+                                               String8(""),
+                                               &mDriverSideOutput->mLatency,
+                                               mDriverSideOutput->mFlags);
+
+        if (status != NO_ERROR) {
+            ALOGE("Cannot open driver side output stream.");
+        } else {
+            mDriverSideOutput->mSamplingRate = config.sample_rate;
+            mDriverSideOutput->mChannelMask = config.channel_mask;
+            mDriverSideOutput->mFormat = config.format;
+
+            addOutput(handle, mDriverSideOutput);
+            setOutputDevice(mDriverSideOutput,
+                            mDriverSideOutput->mDevice,
+                            true);
+        }
+    }
+#endif
+}
 
 status_t AudioPolicyManagerCustom::getOutputForAttr(const audio_attributes_t *attr,
                                               audio_io_handle_t *output,
@@ -113,6 +171,12 @@ status_t AudioPolicyManagerCustom::getOutputForAttr(const audio_attributes_t *at
     if ((attributes.flags & AUDIO_FLAG_HW_AV_SYNC) != 0) {
         flags = (audio_output_flags_t)(flags | AUDIO_OUTPUT_FLAG_HW_AV_SYNC);
     }
+
+#ifdef DRIVER_SIDE_PLAYBACK_ENABLED
+    if (attributes.usage == AUDIO_USAGE_ASSISTANCE_NAVIGATION_GUIDANCE) {
+        flags = (audio_output_flags_t)(AUDIO_OUTPUT_FLAG_FAST | AUDIO_OUTPUT_FLAG_DRIVER_SIDE);
+    }
+#endif
 
     ALOGV("getOutputForAttr() device 0x%x, samplingRate %d, format %x, channelMask %x, flags %x",
           device, samplingRate, format, channelMask, flags);

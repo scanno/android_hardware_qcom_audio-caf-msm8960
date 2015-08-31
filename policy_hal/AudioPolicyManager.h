@@ -28,8 +28,7 @@ class AudioPolicyManagerCustom: public AudioPolicyManager
 {
 
 public:
-        AudioPolicyManagerCustom(AudioPolicyClientInterface *clientInterface)
-        : AudioPolicyManager(clientInterface) {}
+        AudioPolicyManagerCustom(AudioPolicyClientInterface *clientInterface);
 
         virtual ~AudioPolicyManagerCustom() {}
 
@@ -59,6 +58,8 @@ protected:
         // internal function to derive a stream type value from audio attributes
         audio_stream_type_t streamTypefromAttributesInt(const audio_attributes_t *attr);
         bool isValidAttributes(const audio_attributes_t *paa);
+        sp<SwAudioOutputDescriptor> mDriverSideOutput;
+        sp<IOProfile> mDriverSideProfile;
 };
 
 };
