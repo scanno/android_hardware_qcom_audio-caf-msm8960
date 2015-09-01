@@ -44,6 +44,7 @@ public:
                                           audio_port_handle_t selectedDeviceId,
                                           const audio_offload_info_t *offloadInfo);
 
+        virtual void setPhoneState(audio_mode_t state);
 protected:
         virtual audio_io_handle_t getOutputForDevice(
                 audio_devices_t device,
