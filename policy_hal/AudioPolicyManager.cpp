@@ -502,6 +502,121 @@ bool AudioPolicyManagerCustom::isValidAttributes(const audio_attributes_t *paa)
     return true;
 }
 
+void AudioPolicyManagerCustom::setPhoneState(audio_mode_t state)
+{
+    ALOGV("setPhoneState() state %d", state);
+    // store previous phone state for management of sonification strategy below
+    int oldState = mEngine->getPhoneState();
+
+    if (mEngine->setPhoneState(state) != NO_ERROR) {
+        ALOGW("setPhoneState() invalid or same state %d", state);
+        return;
+    }
+    /// Opens: can these line be executed after the switch of volume curves???
+    // if leaving call state, handle special case of active streams
+    // pertaining to sonification strategy see handleIncallSonification()
+    if (isStateInCall(oldState)) {
+        ALOGV("setPhoneState() in call state management: new state is %d", state);
+        for (int stream = 0; stream < AUDIO_STREAM_CNT; stream++) {
+            if (stream == AUDIO_STREAM_PATCH) {
+                continue;
+            }
+            handleIncallSonification((audio_stream_type_t)stream, false, true);
+        }
+
+        // force reevaluating accessibility routing when call stops
+        mpClientInterface->invalidateStream(AUDIO_STREAM_ACCESSIBILITY);
+    }
+
+    /**
+     * Switching to or from incall state or switching between telephony and VoIP lead to force
+     * routing command.
+     */
+    bool force = ((is_state_in_call(oldState) != is_state_in_call(state))
+                  || (is_state_in_call(state) && (state != oldState)));
+
+    // check for device and output changes triggered by new phone state
+    checkA2dpSuspend();
+    checkOutputForAllStrategies();
+    updateDevicesAndOutputs();
+
+    int delayMs = 0;
+    if (isStateInCall(state)) {
+        nsecs_t sysTime = systemTime();
+        for (size_t i = 0; i < mOutputs.size(); i++) {
+            sp<SwAudioOutputDescriptor> desc = mOutputs.valueAt(i);
+            // mute media and sonification strategies and delay device switch by the largest
+            // latency of any output where either strategy is active.
+            // This avoid sending the ring tone or music tail into the earpiece or headset.
+            if ((isStrategyActive(desc, STRATEGY_MEDIA,
+                                  SONIFICATION_HEADSET_MUSIC_DELAY,
+                                  sysTime) ||
+                 isStrategyActive(desc, STRATEGY_SONIFICATION,
+                                  SONIFICATION_HEADSET_MUSIC_DELAY,
+                                  sysTime)) &&
+                    (delayMs < (int)desc->latency()*2)) {
+                delayMs = desc->latency()*2;
+            }
+            setStrategyMute(STRATEGY_MEDIA, true, desc);
+            setStrategyMute(STRATEGY_MEDIA, false, desc, MUTE_TIME_MS,
+                getDeviceForStrategy(STRATEGY_MEDIA, true /*fromCache*/));
+            setStrategyMute(STRATEGY_SONIFICATION, true, desc);
+            setStrategyMute(STRATEGY_SONIFICATION, false, desc, MUTE_TIME_MS,
+                getDeviceForStrategy(STRATEGY_SONIFICATION, true /*fromCache*/));
+        }
+    }
+
+    if (hasPrimaryOutput()) {
+        // Note that despite the fact that getNewOutputDevice() is called on the primary output,
+        // the device returned is not necessarily reachable via this output
+        audio_devices_t rxDevice = getNewOutputDevice(mPrimaryOutput, false /*fromCache*/);
+        // force routing command to audio hardware when ending call
+        // even if no device change is needed
+        if (isStateInCall(oldState) && rxDevice == AUDIO_DEVICE_NONE) {
+            rxDevice = mPrimaryOutput->device();
+        }
+
+        if (state == AUDIO_MODE_IN_CALL) {
+            updateCallRouting(rxDevice, delayMs);
+        } else if (oldState == AUDIO_MODE_IN_CALL) {
+            if (mCallRxPatch != 0) {
+                mpClientInterface->releaseAudioPatch(mCallRxPatch->mAfPatchHandle, 0);
+                mCallRxPatch.clear();
+            }
+            if (mCallTxPatch != 0) {
+                mpClientInterface->releaseAudioPatch(mCallTxPatch->mAfPatchHandle, 0);
+                mCallTxPatch.clear();
+            }
+            setOutputDevice(mPrimaryOutput, rxDevice, force, 0);
+        } else {
+            setOutputDevice(mPrimaryOutput, rxDevice, force, 0);
+        }
+    }
+#if 0
+    // if entering in call state, handle special case of active streams
+    // pertaining to sonification strategy see handleIncallSonification()
+    if (isStateInCall(state)) {
+        ALOGV("setPhoneState() in call state management: new state is %d", state);
+        for (int stream = 0; stream < AUDIO_STREAM_CNT; stream++) {
+            if (stream == AUDIO_STREAM_PATCH) {
+                continue;
+            }
+            handleIncallSonification((audio_stream_type_t)stream, true, true);
+        }
+
+        // force reevaluating accessibility routing when call starts
+        mpClientInterface->invalidateStream(AUDIO_STREAM_ACCESSIBILITY);
+    }
+#endif
+    // Flag that ringtone volume must be limited to music volume until we exit MODE_RINGTONE
+    if (state == AUDIO_MODE_RINGTONE &&
+        isStreamActive(AUDIO_STREAM_MUSIC, SONIFICATION_HEADSET_MUSIC_DELAY)) {
+        mLimitRingtoneVolume = true;
+    } else {
+        mLimitRingtoneVolume = false;
+    }
+}
+
 extern "C" AudioPolicyInterface* createAudioPolicyManager(
         AudioPolicyClientInterface *clientInterface)
 {
