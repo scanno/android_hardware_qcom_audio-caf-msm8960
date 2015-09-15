@@ -2842,6 +2842,8 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->supported_channel_masks[0] = AUDIO_CHANNEL_OUT_STEREO;
     out->handle = handle;
     out->bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
+    out->non_blocking = 0;
+    out->use_small_bufs = false;
 
     /* Init use case and pcm_config */
     if ((out->flags == AUDIO_OUTPUT_FLAG_DIRECT) &&
@@ -2980,6 +2982,15 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
 
         if (flags & AUDIO_OUTPUT_FLAG_NON_BLOCKING)
             out->non_blocking = 1;
+
+        if (platform_use_small_buffer(&config->offload_info)) {
+            //this flag is set from framework only if its for PCM formats
+            //no need to check for PCM format again
+            out->non_blocking = 0;
+            out->use_small_bufs = true;
+            ALOGI("Keep write blocking for small buff: non_blockling %d",
+                  out->non_blocking);
+        }
 
         out->send_new_metadata = 1;
         out->offload_state = OFFLOAD_STATE_IDLE;
