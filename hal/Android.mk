@@ -124,6 +124,10 @@ ifeq ($(strip $(AUDIO_FEATURE_ENABLED_EXTN_FLAC_DECODER)),true)
     LOCAL_CFLAGS += -DQTI_FLAC_DECODER
 endif
 
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_WMA_OFFLOAD)),true)
+    LOCAL_CFLAGS += -DWMA_OFFLOAD_ENABLED
+endif
+
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_DEV_ARBI)),true)
     LOCAL_CFLAGS += -DDEV_ARBI_ENABLED
     LOCAL_SRC_FILES += audio_extn/dev_arbi.c
