@@ -32,6 +32,7 @@ public:
 
         virtual ~AudioPolicyManagerCustom() {}
 
+        virtual bool isOffloadSupported(const audio_offload_info_t& offloadInfo);
         virtual status_t getOutputForAttr(const audio_attributes_t *attr,
                                           audio_io_handle_t *output,
                                           audio_session_t session,
