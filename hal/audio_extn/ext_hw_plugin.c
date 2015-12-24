@@ -54,6 +54,7 @@ struct ext_hw_plugin_data {
     int32_t                        usecase_ref_count[AUDIO_HAL_PLUGIN_USECASE_MAX];
     snd_device_t                   out_snd_dev[AUDIO_HAL_PLUGIN_USECASE_MAX];
     snd_device_t                   in_snd_dev[AUDIO_HAL_PLUGIN_USECASE_MAX];
+    bool                           mic_mute;
 };
 
 /* This can be defined in platform specific file or use compile flag */
@@ -110,6 +111,8 @@ void* audio_extn_ext_hw_plugin_init(struct audio_device *adev)
             goto plugin_init_fail;
         }
     }
+
+    my_plugin->mic_mute = false;
     return my_plugin;
 
 plugin_init_fail:
@@ -260,6 +263,27 @@ int32_t audio_extn_ext_hw_plugin_usecase_start(void *plugin, struct audio_usecas
                 return ret;
             }
             my_plugin->in_snd_dev[codec_enable.usecase] = codec_enable.snd_dev;
+
+            if (my_plugin->mic_mute &&
+                codec_enable.usecase == AUDIO_HAL_PLUGIN_USECASE_HFP_VOICE_CALL) {
+                int plugin_ret;
+                audio_hal_plugin_codec_set_pp_mute_t pp_mute;
+
+                pp_mute.usecase = codec_enable.usecase;
+                pp_mute.snd_dev= codec_enable.snd_dev;
+                pp_mute.ch_mask = AUDIO_CHANNEL_IN_ALL;
+                pp_mute.flag = my_plugin->mic_mute;
+
+                ALOGV("%s: sending codec pp mute msg to HAL plugin driver, %d, %d, %x, %d",
+                        __func__, (int)pp_mute.usecase, (int)pp_mute.snd_dev,
+                        (int)pp_mute.ch_mask, (int)pp_mute.flag);
+
+                plugin_ret = my_plugin->audio_hal_plugin_send_msg(
+                               AUDIO_HAL_PLUGIN_MSG_CODEC_SET_PP_MUTE, &pp_mute,
+                               sizeof(pp_mute));
+                if (plugin_ret)
+                  ALOGE("%s: Failed to set plugin pp mute err: %d", __func__, plugin_ret);
+            }
         }
         my_plugin->usecase_ref_count[codec_enable.usecase]++;
     }
@@ -1322,6 +1346,49 @@ done:
         free(kv_pairs);
     if(value != NULL)
         free(value);
+    return ret;
+}
+
+int audio_extn_ext_hw_plugin_set_mic_mute(void *plugin, bool mute)
+{
+    struct ext_hw_plugin_data *my_plugin = NULL;
+    audio_hal_plugin_codec_set_pp_mute_t pp_mute;
+    int ret = 0;
+
+    ALOGD("%s: received set mic mute (%d)", __func__, mute);
+
+    if (plugin == NULL) {
+        ALOGE("[%s] received null pointer",__func__);
+        return -EINVAL;
+    }
+
+    my_plugin = (struct ext_hw_plugin_data *)plugin;
+    if (!my_plugin->audio_hal_plugin_send_msg) {
+        ALOGE("%s: NULL audio_hal_plugin_send_msg func ptr", __func__);
+        return -EINVAL;
+    }
+
+    my_plugin->mic_mute = mute;
+
+    /* Set mic mute is currently supported only for HFP call use case. */
+    if (my_plugin->usecase_ref_count[AUDIO_HAL_PLUGIN_USECASE_HFP_VOICE_CALL]) {
+        pp_mute.snd_dev= my_plugin->in_snd_dev[AUDIO_HAL_PLUGIN_USECASE_HFP_VOICE_CALL];
+        pp_mute.usecase = AUDIO_HAL_PLUGIN_USECASE_HFP_VOICE_CALL;
+        pp_mute.ch_mask = AUDIO_CHANNEL_IN_ALL;
+        pp_mute.flag = mute;
+
+        ALOGV("%s: sending codec pp mute msg to HAL plugin driver, %d, %d, %x, %d",
+                __func__, (int)pp_mute.usecase, (int)pp_mute.snd_dev,
+                (int)pp_mute.ch_mask, (int)pp_mute.flag);
+
+        ret = my_plugin->audio_hal_plugin_send_msg(
+                AUDIO_HAL_PLUGIN_MSG_CODEC_SET_PP_MUTE, &pp_mute,
+                sizeof(pp_mute));
+        if (ret) {
+            ALOGE("%s: Failed to set plugin pp mute err: %d", __func__, ret);
+        }
+    }
+
     return ret;
 }
 #endif /* EXT_HW_PLUGIN_ENABLED */

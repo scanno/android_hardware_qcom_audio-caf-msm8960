@@ -460,6 +460,7 @@ int b64encode(uint8_t *inp, int ilen, char* outp);
 #define audio_extn_ext_hw_plugin_deinit(plugin)              (0)
 #define audio_extn_ext_hw_plugin_enable(plugin, out, enable) (0)
 #define audio_extn_ext_hw_plugin_set_parameters(plugin, parms) (0)
+#define audio_extn_ext_hw_plugin_set_mic_mute(plugin, mute) (0)
 #else
 void* audio_extn_ext_hw_plugin_init(struct audio_device *adev);
 int audio_extn_ext_hw_plugin_deinit(void *plugin);
@@ -469,5 +470,6 @@ int audio_extn_ext_hw_plugin_set_parameters(void *plugin,
                                            struct str_parms *parms);
 int audio_extn_ext_hw_plugin_get_parameters(void *plugin,
                   struct str_parms *query, struct str_parms *reply);
+int audio_extn_ext_hw_plugin_set_mic_mute(void *plugin, bool mute);
 #endif
 #endif /* AUDIO_EXTN_H */
