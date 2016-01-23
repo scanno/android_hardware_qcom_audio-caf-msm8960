@@ -99,7 +99,9 @@ enum {
 
     /* HFP Use case*/
     USECASE_AUDIO_HFP_SCO,
+    USECASE_AUDIO_HFP_SCO_LINK,
     USECASE_AUDIO_HFP_SCO_WB,
+    USECASE_AUDIO_HFP_SCO_LINK_WB,
 
     /* Capture usecases */
     USECASE_AUDIO_RECORD,

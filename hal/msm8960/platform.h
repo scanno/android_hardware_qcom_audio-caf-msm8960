@@ -187,6 +187,7 @@ enum {
 #define ASM_TX_LOOPBACK 10
 #define I2S_HOSTLESS 11
 #define HFP_ASM_RX_TX 18
+#define ASM_RX_LOOPBACK 22
 
 #define INCALL_MUSIC_UPLINK_PCM_DEVICE 1
 
