@@ -793,6 +793,75 @@ bool AudioPolicyManagerCustom::isOffloadSupported(const audio_offload_info_t& of
     return (profile != 0);
 }
 
+status_t AudioPolicyManagerCustom::setStreamVolumeIndex(audio_stream_type_t stream,
+                                                  int index,
+                                                  audio_devices_t device)
+{
+    if ((index < mStreams.valueFor(stream).getVolumeIndexMin()) ||
+            (index > mStreams.valueFor(stream).getVolumeIndexMax())) {
+        return BAD_VALUE;
+    }
+    if (!audio_is_output_device(device)) {
+        return BAD_VALUE;
+    }
+
+    // Force max volume if stream cannot be muted
+    if (!mStreams.canBeMuted(stream)) index = mStreams.valueFor(stream).getVolumeIndexMax();
+
+    ALOGV("setStreamVolumeIndex() stream %d, device %04x, index %d",
+          stream, device, index);
+
+    // if device is AUDIO_DEVICE_OUT_DEFAULT set default value and
+    // clear all device specific values
+    // FIXME: no need to clear volume index if default device
+    //        at least not needed for AUDIO_STREAM_MUSIC
+    //        AUDIO_STREAM_ACCESSIBILITY follows
+    if (device == AUDIO_DEVICE_OUT_DEFAULT &&
+            stream != AUDIO_STREAM_MUSIC &&
+            stream != AUDIO_STREAM_ACCESSIBILITY) {
+        mStreams.clearCurrentVolumeIndex(stream);
+    }
+    mStreams.addCurrentVolumeIndex(stream, device, index);
+
+    // update volume on all outputs whose current device is also selected by the same
+    // strategy as the device specified by the caller
+    audio_devices_t strategyDevice = getDeviceForStrategy(getStrategy(stream), true /*fromCache*/);
+
+    //FIXME: AUDIO_STREAM_ACCESSIBILITY volume follows AUDIO_STREAM_MUSIC for now
+    audio_devices_t accessibilityDevice = AUDIO_DEVICE_NONE;
+    if (stream == AUDIO_STREAM_MUSIC) {
+        mStreams.addCurrentVolumeIndex(AUDIO_STREAM_ACCESSIBILITY, device, index);
+        accessibilityDevice = getDeviceForStrategy(STRATEGY_ACCESSIBILITY, true /*fromCache*/);
+    }
+    if ((device != AUDIO_DEVICE_OUT_DEFAULT) &&
+            (device & (strategyDevice | accessibilityDevice)) == 0) {
+        return NO_ERROR;
+    }
+    status_t status = NO_ERROR;
+    for (size_t i = 0; i < mOutputs.size(); i++) {
+        sp<SwAudioOutputDescriptor> desc = mOutputs.valueAt(i);
+        audio_devices_t curDevice = Volume::getDeviceForVolume(desc->device());
+        if ((device == AUDIO_DEVICE_OUT_DEFAULT) || ((curDevice & strategyDevice) != 0)) {
+            status_t volStatus = checkAndSetVolume(stream,
+                                                   mStreams.valueFor(stream).getVolumeIndex(curDevice),
+                                                   desc,
+                                                   curDevice);
+            if (volStatus != NO_ERROR) {
+                status = volStatus;
+            }
+        }
+        if ((accessibilityDevice != AUDIO_DEVICE_NONE) &&
+                ((device == AUDIO_DEVICE_OUT_DEFAULT) || ((curDevice & accessibilityDevice) != 0)))
+        {
+            status_t volStatus = checkAndSetVolume(AUDIO_STREAM_ACCESSIBILITY,
+                                                   mStreams.valueFor(stream).getVolumeIndex(curDevice),
+                                                   desc,
+                                                   curDevice);
+        }
+    }
+    return status;
+}
+
 extern "C" AudioPolicyInterface* createAudioPolicyManager(
         AudioPolicyClientInterface *clientInterface)
 {
