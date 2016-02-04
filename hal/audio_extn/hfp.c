@@ -128,6 +128,7 @@ static int32_t start_hfp(struct audio_device *adev,
     int32_t i, ret = 0;
     struct audio_usecase *uc_info;
     int32_t pcm_dev_rx_id, pcm_dev_tx_id, pcm_dev_asm_rx_id, pcm_dev_asm_tx_id;
+    audio_usecase_t uc_id_link;
 
     ALOGD("%s: enter", __func__);
 
@@ -147,10 +148,45 @@ static int32_t start_hfp(struct audio_device *adev,
 
     select_devices(adev, hfpmod.ucid);
 
+    /*
+    *                 pcm_dev_asm_rx_id, hfp_sco_rx
+    *                 +--------+
+    *     +---------->| PCM_RX |----> bt_uplink
+    *     |           +--------+
+    *     |
+    *     |           pcm_dev_asm_tx_id, hfp_sco_tx
+    *     |           +--------+
+    *     |       +---| PCM_TX |<---- bt_downlink
+    * LB2 |       |   +--------+
+    *     |       |
+    *     |   LB1 |   pcm_dev_rx_id, hfp_pcm_rx
+    *     |       |   +--------+
+    *     |       +-->| PRI_RX |----> car_speaker
+    *     |           +--------+
+    *     |
+    *     |           pcm_dev_tx_id, hfp_pcm_tx
+    *     |           +--------+
+    *     +-----------| PRI_TX |<---- car_microphone
+    *                 +--------+
+    */
+
+    switch (uc_info->id) {
+    case USECASE_AUDIO_HFP_SCO:
+        uc_id_link = USECASE_AUDIO_HFP_SCO_LINK;
+        break;
+    case USECASE_AUDIO_HFP_SCO_WB:
+        uc_id_link = USECASE_AUDIO_HFP_SCO_LINK_WB;
+        break;
+    default:
+        ALOGE("%s: Invalid use-case %d", __func__, uc_info->id);
+        ret = -EINVAL;
+        goto exit;
+    }
+
     pcm_dev_rx_id = platform_get_pcm_device_id(uc_info->id, PCM_PLAYBACK);
     pcm_dev_tx_id = platform_get_pcm_device_id(uc_info->id, PCM_CAPTURE);
-    pcm_dev_asm_rx_id = ASM_TX_LOOPBACK;
-    pcm_dev_asm_tx_id = HFP_PCM_RX;
+    pcm_dev_asm_rx_id = platform_get_pcm_device_id(uc_id_link, PCM_PLAYBACK); // bt_uplink
+    pcm_dev_asm_tx_id = platform_get_pcm_device_id(uc_id_link, PCM_CAPTURE);  // bt_downlink
     if (pcm_dev_rx_id < 0 || pcm_dev_tx_id < 0 ||
         pcm_dev_asm_rx_id < 0 || pcm_dev_asm_tx_id < 0 ) {
         ALOGE("%s: Invalid PCM devices (rx: %d tx: %d asm: rx %d tx %d) for the usecase(%d)",
