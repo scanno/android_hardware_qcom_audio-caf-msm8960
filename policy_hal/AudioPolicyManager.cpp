@@ -103,7 +103,10 @@ AudioPolicyManagerCustom::AudioPolicyManagerCustom(AudioPolicyClientInterface *c
     }
 #endif
     // set the volume index for music playback
-    setStreamVolumeIndex(AUDIO_STREAM_MUSIC, 1, AUDIO_DEVICE_OUT_SPEAKER);
+    initStreamVolume(AUDIO_STREAM_MUSIC, 0, 15);
+    char propValue[PROP_VALUE_MAX];
+    property_get("early.audio.volume",propValue,"0");
+    setStreamVolumeIndex(AUDIO_STREAM_MUSIC, atoi(propValue), AUDIO_DEVICE_OUT_SPEAKER);
 }
 
 status_t AudioPolicyManagerCustom::getOutputForAttr(const audio_attributes_t *attr,
