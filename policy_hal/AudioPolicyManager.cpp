@@ -817,11 +817,11 @@ status_t AudioPolicyManagerCustom::setStreamVolumeIndex(audio_stream_type_t stre
     // if device is AUDIO_DEVICE_OUT_DEFAULT set default value and
     // clear all device specific values
     // FIXME: no need to clear volume index if default device
-    //        at least not needed for AUDIO_STREAM_MUSIC
-    //        AUDIO_STREAM_ACCESSIBILITY follows
-    if (device == AUDIO_DEVICE_OUT_DEFAULT &&
-            stream != AUDIO_STREAM_MUSIC &&
-            stream != AUDIO_STREAM_ACCESSIBILITY) {
+    //        for music stream with volume already cached for strategy device
+    //        to avoid ramp up/down if stream started before vol table ready.
+    if ((device == AUDIO_DEVICE_OUT_DEFAULT) &&
+            ((stream != AUDIO_STREAM_MUSIC) ||
+            (!mStreams.valueFor(stream).getVolumeIndex(getDeviceForStrategy(getStrategy(stream), true))))) {
         mStreams.clearCurrentVolumeIndex(stream);
     }
     mStreams.addCurrentVolumeIndex(stream, device, index);
@@ -846,7 +846,8 @@ status_t AudioPolicyManagerCustom::setStreamVolumeIndex(audio_stream_type_t stre
         audio_devices_t curDevice = Volume::getDeviceForVolume(desc->device());
         if ((device == AUDIO_DEVICE_OUT_DEFAULT) || ((curDevice & strategyDevice) != 0)) {
             status_t volStatus = checkAndSetVolume(stream,
-                                                   mStreams.valueFor(stream).getVolumeIndex(curDevice),
+                                                   ((stream == AUDIO_STREAM_MUSIC) ?
+                                                       mStreams.valueFor(stream).getVolumeIndex(curDevice) : index),
                                                    desc,
                                                    curDevice);
             if (volStatus != NO_ERROR) {
@@ -857,7 +858,7 @@ status_t AudioPolicyManagerCustom::setStreamVolumeIndex(audio_stream_type_t stre
                 ((device == AUDIO_DEVICE_OUT_DEFAULT) || ((curDevice & accessibilityDevice) != 0)))
         {
             status_t volStatus = checkAndSetVolume(AUDIO_STREAM_ACCESSIBILITY,
-                                                   mStreams.valueFor(stream).getVolumeIndex(curDevice),
+                                                   index,
                                                    desc,
                                                    curDevice);
         }
