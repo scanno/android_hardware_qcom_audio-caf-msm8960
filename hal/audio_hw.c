@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -2185,6 +2185,21 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
             ALOGD("copl(%p):send new gapless metadata", out);
             compress_set_gapless_metadata(out->compr, &out->gapless_mdata);
             out->send_new_metadata = 0;
+        }
+
+        if (out->compr != NULL && out->offload_state == OFFLOAD_STATE_PAUSED) {
+            int status;
+
+            status = compress_resume(out->compr);
+
+            ALOGD("%s: resumed previously paused compress offload playback, status %d",
+                  __func__, status);
+
+            out->offload_state = OFFLOAD_STATE_PLAYING;
+
+            audio_extn_dts_eagle_fade(adev, true);
+            audio_extn_dts_notify_playback_state(out->usecase, 0, out->sample_rate,
+                                                     popcount(out->channel_mask), 1);
         }
 
         ret = compress_write(out->compr, buffer, bytes);
