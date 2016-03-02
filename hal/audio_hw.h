@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
  * Not a contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -102,6 +102,10 @@ enum {
     USECASE_AUDIO_HFP_SCO_LINK,
     USECASE_AUDIO_HFP_SCO_WB,
     USECASE_AUDIO_HFP_SCO_LINK_WB,
+    USECASE_AUDIO_HFP_SCO_UPLINK,
+    USECASE_AUDIO_HFP_SCO_DOWNLINK,
+    USECASE_AUDIO_HFP_SCO_UPLINK_WB,
+    USECASE_AUDIO_HFP_SCO_DOWNLINK_WB,
 
     /* Capture usecases */
     USECASE_AUDIO_RECORD,
