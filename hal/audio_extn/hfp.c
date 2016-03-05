@@ -1,5 +1,5 @@
 /* hfp.c
-Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -127,6 +127,7 @@ static int32_t start_hfp(struct audio_device *adev,
 {
     int32_t i, ret = 0;
     struct audio_usecase *uc_info;
+    struct audio_usecase cal_uc_info;
     int32_t pcm_dev_rx_id, pcm_dev_tx_id, pcm_dev_asm_rx_id, pcm_dev_asm_tx_id;
     audio_usecase_t uc_id_link;
 
@@ -200,72 +201,92 @@ static int32_t start_hfp(struct audio_device *adev,
           __func__, pcm_dev_rx_id, pcm_dev_tx_id, pcm_dev_asm_rx_id, pcm_dev_asm_tx_id,
           uc_info->id);
 
-    ALOGD("%s: Opening PCM playback device card_id(%d) pcm_dev_asm_rx_id(%d)",
-          __func__, adev->snd_card, pcm_dev_asm_rx_id);
-    hfpmod.hfp_sco_rx = pcm_open(adev->snd_card,
-                                  pcm_dev_asm_rx_id,
-                                  PCM_OUT, &pcm_config_hfp);
-    if (hfpmod.hfp_sco_rx && !pcm_is_ready(hfpmod.hfp_sco_rx)) {
-        ALOGE("%s: %s", __func__, pcm_get_error(hfpmod.hfp_sco_rx));
-        ret = -EIO;
-        goto exit;
-    }
-    ALOGD("%s: Opening PCM playback device card_id(%d) device_rx_id(%d)",
-          __func__, adev->snd_card, pcm_dev_rx_id);
-    hfpmod.hfp_pcm_rx = pcm_open(adev->snd_card,
-                                   pcm_dev_rx_id,
-                                   PCM_OUT, &pcm_config_hfp);
-    if (hfpmod.hfp_pcm_rx && !pcm_is_ready(hfpmod.hfp_pcm_rx)) {
-        ALOGE("%s: %s", __func__, pcm_get_error(hfpmod.hfp_pcm_rx));
-        ret = -EIO;
-        goto exit;
-    }
-	ALOGD("%s: Opening PCM capture device card_id(%d) device_asm_tx_id(%d)",
-          __func__, adev->snd_card, pcm_dev_asm_tx_id);
-    hfpmod.hfp_sco_tx = pcm_open(adev->snd_card,
-                                  pcm_dev_asm_tx_id,
-                                  PCM_IN, &pcm_config_hfp);
-    if (hfpmod.hfp_sco_tx && !pcm_is_ready(hfpmod.hfp_sco_tx)) {
-        ALOGE("%s: %s", __func__, pcm_get_error(hfpmod.hfp_sco_tx));
-        ret = -EIO;
-        goto exit;
-    }
-    ALOGD("%s: Opening PCM capture device card_id(%d) device_tx_id(%d)",
-          __func__, adev->snd_card, pcm_dev_tx_id);
-    hfpmod.hfp_pcm_tx = pcm_open(adev->snd_card,
-                                   pcm_dev_tx_id,
-                                   PCM_IN, &pcm_config_hfp);
-    if (hfpmod.hfp_pcm_tx && !pcm_is_ready(hfpmod.hfp_pcm_tx)) {
-        ALOGE("%s: %s", __func__, pcm_get_error(hfpmod.hfp_pcm_tx));
-        ret = -EIO;
-        goto exit;
-    }
-
     if ((uc_info->out_snd_device != SND_DEVICE_NONE) ||
         (uc_info->in_snd_device != SND_DEVICE_NONE)) {
         if (audio_extn_ext_hw_plugin_usecase_start(adev->ext_hw_plugin, uc_info))
             ALOGE("%s: failed to start ext hw plugin", __func__);
     }
 
-    if (pcm_start(hfpmod.hfp_sco_rx) < 0) {
-        ALOGE("%s: pcm start for hfp sco rx failed", __func__);
-        ret = -EINVAL;
-        goto exit;
+    memcpy(&cal_uc_info, uc_info, sizeof(struct audio_usecase));
+
+    { /* Calibrate and start the uplink. */
+        if (uc_info->id == USECASE_AUDIO_HFP_SCO)
+          cal_uc_info.id = USECASE_AUDIO_HFP_SCO_UPLINK;
+        else
+          cal_uc_info.id = USECASE_AUDIO_HFP_SCO_UPLINK_WB;
+
+        platform_send_audio_calibration_for_usecase(adev->platform, &cal_uc_info);
+
+        ALOGD("%s: Opening PCM capture device card_id(%d) device_tx_id(%d)",
+              __func__, adev->snd_card, pcm_dev_tx_id);
+        hfpmod.hfp_pcm_tx = pcm_open(adev->snd_card,
+                                     pcm_dev_tx_id,
+                                     PCM_IN, &pcm_config_hfp);
+        if (hfpmod.hfp_pcm_tx && !pcm_is_ready(hfpmod.hfp_pcm_tx)) {
+            ALOGE("%s: %s", __func__, pcm_get_error(hfpmod.hfp_pcm_tx));
+            ret = -EIO;
+            goto exit;
+        }
+        ALOGD("%s: Opening PCM playback device card_id(%d) pcm_dev_asm_rx_id(%d)",
+              __func__, adev->snd_card, pcm_dev_asm_rx_id);
+        hfpmod.hfp_sco_rx = pcm_open(adev->snd_card,
+                                     pcm_dev_asm_rx_id,
+                                     PCM_OUT, &pcm_config_hfp);
+        if (hfpmod.hfp_sco_rx && !pcm_is_ready(hfpmod.hfp_sco_rx)) {
+            ALOGE("%s: %s", __func__, pcm_get_error(hfpmod.hfp_sco_rx));
+            ret = -EIO;
+            goto exit;
+        }
+        if (pcm_start(hfpmod.hfp_pcm_tx) < 0) {
+            ALOGE("%s: pcm start for hfp pcm tx failed", __func__);
+            ret = -EINVAL;
+            goto exit;
+        }
+        if (pcm_start(hfpmod.hfp_sco_rx) < 0) {
+            ALOGE("%s: pcm start for hfp sco rx failed", __func__);
+            ret = -EINVAL;
+            goto exit;
+        }
     }
-    if (pcm_start(hfpmod.hfp_sco_tx) < 0) {
-        ALOGE("%s: pcm start for hfp sco tx failed", __func__);
-        ret = -EINVAL;
-        goto exit;
-    }
-    if (pcm_start(hfpmod.hfp_pcm_rx) < 0) {
-        ALOGE("%s: pcm start for hfp pcm rx failed", __func__);
-        ret = -EINVAL;
-        goto exit;
-    }
-    if (pcm_start(hfpmod.hfp_pcm_tx) < 0) {
-        ALOGE("%s: pcm start for hfp pcm tx failed", __func__);
-        ret = -EINVAL;
-        goto exit;
+    { /* Calibrate and start the downlink. */
+        if (uc_info->id == USECASE_AUDIO_HFP_SCO)
+          cal_uc_info.id = USECASE_AUDIO_HFP_SCO_DOWNLINK;
+        else
+          cal_uc_info.id = USECASE_AUDIO_HFP_SCO_DOWNLINK_WB;
+
+        platform_send_audio_calibration_for_usecase(adev->platform, &cal_uc_info);
+
+        ALOGD("%s: Opening PCM capture device card_id(%d) device_asm_tx_id(%d)",
+              __func__, adev->snd_card, pcm_dev_asm_tx_id);
+        hfpmod.hfp_sco_tx = pcm_open(adev->snd_card,
+                                     pcm_dev_asm_tx_id,
+                                     PCM_IN, &pcm_config_hfp);
+        if (hfpmod.hfp_sco_tx && !pcm_is_ready(hfpmod.hfp_sco_tx)) {
+            ALOGE("%s: %s", __func__, pcm_get_error(hfpmod.hfp_sco_tx));
+            ret = -EIO;
+            goto exit;
+        }
+        ALOGD("%s: Opening PCM playback device card_id(%d) device_rx_id(%d)",
+              __func__, adev->snd_card, pcm_dev_rx_id);
+        hfpmod.hfp_pcm_rx = pcm_open(adev->snd_card,
+                                     pcm_dev_rx_id,
+                                     PCM_OUT, &pcm_config_hfp);
+        if (hfpmod.hfp_pcm_rx && !pcm_is_ready(hfpmod.hfp_pcm_rx)) {
+            ALOGE("%s: %s", __func__, pcm_get_error(hfpmod.hfp_pcm_rx));
+            ret = -EIO;
+            goto exit;
+        }
+
+        if (pcm_start(hfpmod.hfp_sco_tx) < 0) {
+            ALOGE("%s: pcm start for hfp sco tx failed", __func__);
+            ret = -EINVAL;
+            goto exit;
+        }
+        if (pcm_start(hfpmod.hfp_pcm_rx) < 0) {
+            ALOGE("%s: pcm start for hfp pcm rx failed", __func__);
+            ret = -EINVAL;
+            goto exit;
+        }
     }
 
     hfpmod.is_hfp_running = true;

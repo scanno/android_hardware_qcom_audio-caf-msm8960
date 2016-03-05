@@ -1190,7 +1190,65 @@ int platform_send_audio_calibration_for_usecase(void *platform,
         return ret;
     }
 
-    if ((usecase->type == PCM_PLAYBACK) || (usecase->type == PCM_HFP_CALL)) {
+    if ((usecase->id == USECASE_AUDIO_HFP_SCO) ||
+        (usecase->id == USECASE_AUDIO_HFP_SCO_WB)) {
+        /* Calibrating for these use cases is no-op as HFP calibration
+         * will use uplink and downlink specific use case IDs and be
+         * handled below.
+         */
+        return ret;
+    }
+
+    if (usecase->type == PCM_HFP_CALL) {
+        int acdb_tx_dev_id;
+        int acdb_rx_dev_id;
+        int tx_sample_rate;
+        int rx_sample_rate;
+        struct stream_out *out = usecase->stream.out;
+
+        switch (usecase->id) {
+        case USECASE_AUDIO_HFP_SCO_UPLINK:
+            acdb_tx_dev_id = 11;
+            acdb_rx_dev_id = 21;
+            tx_sample_rate = 48000;
+            rx_sample_rate = 8000;
+            break;
+        case USECASE_AUDIO_HFP_SCO_DOWNLINK:
+            acdb_tx_dev_id = 20;
+            acdb_rx_dev_id = 15;
+            tx_sample_rate = 8000;
+            rx_sample_rate = 48000;
+            break;
+        case USECASE_AUDIO_HFP_SCO_UPLINK_WB:
+            acdb_tx_dev_id = 11;
+            acdb_rx_dev_id = 39;
+            tx_sample_rate = 48000;
+            rx_sample_rate = 16000;
+            break;
+        case USECASE_AUDIO_HFP_SCO_DOWNLINK_WB:
+            acdb_tx_dev_id = 38;
+            acdb_rx_dev_id = 15;
+            tx_sample_rate = 16000;
+            rx_sample_rate = 48000;
+            break;
+        default:
+            ALOGE("%s: audio calibration not supported for usecase(%d)",
+                  __func__, usecase->id);
+            ret = -EINVAL;
+            break;
+        }
+
+        if ((ret == 0) && (my_data->acdb_send_audio_cal)) {
+            my_data->acdb_send_audio_cal(acdb_tx_dev_id, ACDB_DEV_TYPE_IN,
+                                         platform_get_default_app_type(platform),
+                                         tx_sample_rate);
+            my_data->acdb_send_audio_cal(acdb_rx_dev_id, ACDB_DEV_TYPE_OUT,
+                                         out->app_type_cfg.app_type,
+                                         rx_sample_rate);
+        }
+    }
+
+    if (usecase->type == PCM_PLAYBACK) {
         switch (usecase->id) {
         case USECASE_AUDIO_PLAYBACK_DEEP_BUFFER:
         case USECASE_AUDIO_PLAYBACK_LOW_LATENCY:
@@ -1201,10 +1259,6 @@ int platform_send_audio_calibration_for_usecase(void *platform,
             break;
         case USECASE_AUDIO_PLAYBACK_DRIVER_SIDE:
             acdb_dev_id = 14;
-            break;
-        case USECASE_AUDIO_HFP_SCO:
-        case USECASE_AUDIO_HFP_SCO_WB:
-            acdb_dev_id = 15;
             break;
         default:
             ALOGE("%s: audio calibration not supported for usecase(%d)",
@@ -1223,12 +1277,10 @@ int platform_send_audio_calibration_for_usecase(void *platform,
         }
     }
 
-    if ((usecase->type == PCM_CAPTURE) || (usecase->type == PCM_HFP_CALL)) {
+    if (usecase->type == PCM_CAPTURE) {
         switch (usecase->id) {
         case USECASE_AUDIO_RECORD:
         case USECASE_AUDIO_RECORD_COMPRESS:
-        case USECASE_AUDIO_HFP_SCO:
-        case USECASE_AUDIO_HFP_SCO_WB:
             acdb_dev_id = 11;
             break;
         default:
