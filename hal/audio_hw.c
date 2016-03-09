@@ -227,6 +227,11 @@ const char * const use_case_table[AUDIO_USECASE_MAX] = {
     [USECASE_AUDIO_PLAYBACK_DRIVER_SIDE] = "driver-side-playback",
     [USECASE_AUDIO_PLAYBACK_RES] = "res-playback",
     [USECASE_AUDIO_PLAYBACK_RES_OFFLOAD] = "res-playback-offload",
+
+    /*These use cases do not require mixer path as the audio input
+      are from external sources and do not require kernel setup*/
+   [USECASE_AUDIO_LINE_IN_PASSTHROUGH] = "",
+   [USECASE_AUDIO_HDMI_IN_PASSTHROUGH] = "",
 };
 
 static const audio_usecase_t offload_usecases[] = {
@@ -415,9 +420,15 @@ int enable_audio_route(struct audio_device *adev,
     snd_device_t snd_device;
     char mixer_path[MIXER_PATH_MAX_LENGTH];
 
-    if (usecase == NULL)
+    if (usecase == NULL || usecase->id <= USECASE_INVALID ||
+        usecase->id >= AUDIO_USECASE_MAX){
+        ALOGE("%s: Invalid usecase id:%d", __func__, usecase->id);
         return -EINVAL;
-
+    }
+    if (!strcmp(use_case_table[usecase->id],"")){
+        ALOGE("%s: mixer path is NULL for usecase id:%d", __func__, usecase->id);
+        return -EINVAL;
+    }
     ALOGV("%s: enter: usecase(%d)", __func__, usecase->id);
 
     if (usecase->type == PCM_CAPTURE)
@@ -448,9 +459,15 @@ int disable_audio_route(struct audio_device *adev,
     snd_device_t snd_device;
     char mixer_path[MIXER_PATH_MAX_LENGTH];
 
-    if (usecase == NULL || usecase->id == USECASE_INVALID)
+    if (usecase == NULL || usecase->id <= USECASE_INVALID ||
+        usecase->id >= AUDIO_USECASE_MAX){
+        ALOGE("%s: Invalid usecase id:%d", __func__, usecase->id);
         return -EINVAL;
-
+    }
+    if (!strcmp(use_case_table[usecase->id],"")){
+        ALOGE("%s: mixer path is NULL for usecase id:%d", __func__, usecase->id);
+        return -EINVAL;
+    }
     ALOGV("%s: enter: usecase(%d)", __func__, usecase->id);
     if (usecase->type == PCM_CAPTURE)
         snd_device = usecase->in_snd_device;
