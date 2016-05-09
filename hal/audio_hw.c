@@ -422,7 +422,7 @@ int enable_audio_route(struct audio_device *adev,
 
     if (usecase == NULL || usecase->id <= USECASE_INVALID ||
         usecase->id >= AUDIO_USECASE_MAX){
-        ALOGE("%s: Invalid usecase id:%d", __func__, usecase->id);
+        ALOGE("%s: Invalid usecase", __func__);
         return -EINVAL;
     }
     if (!strcmp(use_case_table[usecase->id],"")){
@@ -461,7 +461,7 @@ int disable_audio_route(struct audio_device *adev,
 
     if (usecase == NULL || usecase->id <= USECASE_INVALID ||
         usecase->id >= AUDIO_USECASE_MAX){
-        ALOGE("%s: Invalid usecase id:%d", __func__, usecase->id);
+        ALOGE("%s: Invalid usecase ", __func__);
         return -EINVAL;
     }
     if (!strcmp(use_case_table[usecase->id],"")){
@@ -2204,24 +2204,27 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
             out->send_new_metadata = 0;
         }
 
-        if (out->compr != NULL && out->offload_state == OFFLOAD_STATE_PAUSED) {
-            int status;
+        if (out->compr != NULL) {
+            if (out->offload_state == OFFLOAD_STATE_PAUSED) {
+                int status;
 
-            status = compress_resume(out->compr);
+                status = compress_resume(out->compr);
 
-            ALOGD("%s: resumed previously paused compress offload playback, status %d",
-                  __func__, status);
+                ALOGD("%s: resumed previously paused compress offload playback, status %d",
+                      __func__, status);
 
-            out->offload_state = OFFLOAD_STATE_PLAYING;
+                out->offload_state = OFFLOAD_STATE_PLAYING;
 
-            audio_extn_dts_eagle_fade(adev, true);
-            audio_extn_dts_notify_playback_state(out->usecase, 0, out->sample_rate,
+                audio_extn_dts_eagle_fade(adev, true);
+                audio_extn_dts_notify_playback_state(out->usecase, 0, out->sample_rate,
                                                      popcount(out->channel_mask), 1);
-        }
+            }
 
-        ret = compress_write(out->compr, buffer, bytes);
-        if (ret < 0)
-            ret = -errno;
+            ret = compress_write(out->compr, buffer, bytes);
+            if (ret < 0)
+                ret = -errno;
+
+        }
         ALOGVV("%s: writing buffer (%d bytes) to compress device returned %d", __func__, bytes, ret);
         if (ret >= 0 && ret < (ssize_t)bytes) {
             ALOGD("No space available in compress driver, post msg to cb thread");
